@@ -478,9 +478,34 @@ function startGame() {
   if (config.gameType === "ranked_bot") {
     config.rated = true;
     const offset = Math.floor(Math.random() * 51) - 25;
-    config.engine.elo = Math.max(500, userInfo.elo + offset);
-    config.engine.depth = 10;
-    config.engine.randomMoveChance = 0;
+    const botElo = Math.max(500, userInfo.elo + offset);
+    config.engine.elo = botElo;
+
+    if (botElo <= 600) {
+      config.engine.depth = 2;
+      config.engine.randomMoveChance = 0.45;
+    } else if (botElo <= 800) {
+      config.engine.depth = 4;
+      config.engine.randomMoveChance = 0.3;
+    } else if (botElo <= 1000) {
+      config.engine.depth = 6;
+      config.engine.randomMoveChance = 0.2;
+    } else if (botElo <= 1300) {
+      config.engine.depth = 8;
+      config.engine.randomMoveChance = 0.1;
+    } else if (botElo <= 1600) {
+      config.engine.depth = 10;
+      config.engine.randomMoveChance = 0.05;
+    } else if (botElo <= 2000) {
+      config.engine.depth = 12;
+      config.engine.randomMoveChance = 0;
+    } else if (botElo <= 2500) {
+      config.engine.depth = 16;
+      config.engine.randomMoveChance = 0;
+    } else {
+      config.engine.depth = 20;
+      config.engine.randomMoveChance = 0;
+    }
   } else {
     const level = getBotLevel(config.engine.level);
     if (level) {
