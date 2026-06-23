@@ -287,6 +287,10 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
 
     render();
+    if (!clock.active) {
+      const justMoved = state.turn === WHITE ? BLACK : WHITE;
+      startClock(clock, justMoved);
+    }
     switchClock(clock);
 
     if (!gameEnded) {
@@ -609,11 +613,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   if (playerSide === BLACK && config.engine.enabled && engine && engine.available) {
     state.turn = WHITE;
-    startClock(clock, WHITE);
     render();
     setTimeout(() => requestEngineMove(), 300);
-  } else {
-    startClock(clock, WHITE);
   }
 
   return {
