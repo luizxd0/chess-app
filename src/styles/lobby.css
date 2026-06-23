@@ -623,8 +623,6 @@
     padding: 4px;
     gap: 3px;
     max-width: 100%;
-    height: 100%;
-    justify-content: center;
   }
 
   .board-view .board-wrap {
