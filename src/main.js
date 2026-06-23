@@ -438,8 +438,6 @@ function startGame() {
   config.rated = false;
 
   if (config.gameType === "coach_bot") {
-    config.playerSide = WHITE;
-    config.side = "white";
     config.engine.elo = 1000;
     config.engine.depth = 10;
     config.engine.randomMoveChance = 0;

@@ -115,12 +115,15 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
 
         ${isCoachBot ? `
           <div class="settings-section">
+            <div class="settings-label">Play as</div>
+            <div class="option-group" id="side-group"></div>
+          </div>
+          <div class="settings-section">
             <div class="settings-label">Bot Level</div>
             <div class="option-group" id="bot-group"></div>
           </div>
           <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:13px;color:#94a3b8;">Play as <strong style="color:#e2e8f0;">White</strong></div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">Engine shows best moves with arrows</div>
+            <div style="font-size:11px;color:#64748b;">Engine shows best moves with arrows</div>
           </div>
         ` : ""}
 
@@ -178,7 +181,7 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
       optsContainer.appendChild(btn);
     });
 
-    if (isCasualBot) {
+    if (isCasualBot || isCoachBot) {
       const sideGroup = screen.querySelector("#side-group");
       SIDES.forEach(s => {
         const btn = document.createElement("button");
@@ -193,22 +196,6 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
         sideGroup.appendChild(btn);
       });
 
-      const botGroup = screen.querySelector("#bot-group");
-      BOT_LEVELS.forEach(lvl => {
-        const btn = document.createElement("button");
-        btn.className = `option-btn ${lvl.id === activeBotLevel ? "active" : ""}`;
-        btn.textContent = lvl.label;
-        btn.addEventListener("click", () => {
-          activeBotLevel = lvl.id;
-          config.engine.level = lvl.id;
-          botGroup.querySelectorAll(".option-btn").forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
-        });
-        botGroup.appendChild(btn);
-      });
-    }
-
-    if (isCoachBot) {
       const botGroup = screen.querySelector("#bot-group");
       BOT_LEVELS.forEach(lvl => {
         const btn = document.createElement("button");
