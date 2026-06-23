@@ -264,6 +264,10 @@
   background: rgba(251, 191, 36, 0.15);
 }
 
+.mode-card-icon.coach {
+  background: rgba(34, 197, 94, 0.15);
+}
+
 .mode-card-info {
   flex: 1;
   min-width: 0;

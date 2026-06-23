@@ -290,5 +290,49 @@ export function createArrowOverlay(boardEl, getPiece) {
     if (svg.parentNode) svg.parentNode.removeChild(svg);
   }
 
-  return { svg, destroy, clearArrows };
+  return { svg, destroy, clearArrows, drawEngineArrows, clearEngineArrows };
+
+  function drawEngineArrows(moves) {
+    clearEngineArrows();
+    if (!moves || moves.length === 0) return;
+
+    const cells = boardEl.querySelectorAll("[data-row]");
+    const cellMap = {};
+    cells.forEach(c => {
+      cellMap[`${c.dataset.row}-${c.dataset.col}`] = c;
+    });
+
+    const colors = ["#15803d", "#2563eb"];
+    const opacities = [0.75, 0.55];
+
+    moves.forEach((m, i) => {
+      if (!m.move || m.move.length < 4) return;
+      const fromCol = m.move.charCodeAt(0) - 97;
+      const fromRow = 8 - parseInt(m.move[1], 10);
+      const toCol = m.move.charCodeAt(2) - 97;
+      const toRow = 8 - parseInt(m.move[3], 10);
+
+      const fromCell = cellMap[`${fromRow}-${fromCol}`];
+      const toCell = cellMap[`${toRow}-${toCol}`];
+      if (!fromCell || !toCell) return;
+
+      const from = cellCenter(fromCell);
+      const to = cellCenter(toCell);
+
+      const dr = toRow - fromRow;
+      const dc = toCol - fromCol;
+      let corner = null;
+      if (Math.abs(dc) === 2 && Math.abs(dr) === 1 || Math.abs(dc) === 1 && Math.abs(dr) === 2) {
+        corner = computeKnightCorner(from.x, from.y, to.x, to.y, dr, dc);
+      }
+
+      const arrow = createArrowEl(from.x, from.y, to.x, to.y, corner, colors[i], opacities[i]);
+      arrow.classList.add("engine-arrow");
+      svg.appendChild(arrow);
+    });
+  }
+
+  function clearEngineArrows() {
+    svg.querySelectorAll(".engine-arrow").forEach(el => el.remove());
+  }
 }

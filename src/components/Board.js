@@ -328,7 +328,25 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     if (!gameEnded) {
       requestEngineMove();
+      if (state.turn === playerSide) {
+        requestEngineSuggestions();
+      }
     }
+  }
+
+  function requestEngineSuggestions() {
+    if (config.gameType !== "coach_bot") return;
+    if (!engine || !engine.available) return;
+    if (state.turn !== playerSide) return;
+    if (state.gameOver || gameEnded) return;
+
+    const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
+    engine.goMultiPV(fen, 12, 2).then((moves) => {
+      if (gameEnded || state.gameOver) return;
+      if (state.turn === playerSide) {
+        arrowOverlay.drawEngineArrows(moves);
+      }
+    });
   }
 
   function getAllMoves() {
@@ -470,6 +488,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!piece || getPieceColor(piece) !== state.turn) return;
     if (state.turn !== playerSide && config.engine.enabled) return;
 
+    arrowOverlay.clearEngineArrows();
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     dragState = { row, col, legalMoves, dragging: false, clone: null, piece };
@@ -561,6 +580,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (state.turn !== playerSide && config.engine.enabled) return;
 
     e.preventDefault();
+    arrowOverlay.clearEngineArrows();
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     const cellRect = cell.getBoundingClientRect();
@@ -653,6 +673,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const piece = state.pieces[`${row}-${col}`];
     if (piece && getPieceColor(piece) === state.turn) {
       if (state.turn !== playerSide && config.engine.enabled) return;
+      arrowOverlay.clearEngineArrows();
       if (state.selected && state.selected.row === row && state.selected.col === col) {
         state.selected = null;
         state.legalMoves = [];
@@ -732,6 +753,10 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     state.turn = WHITE;
     render();
     setTimeout(() => requestEngineMove(), 300);
+  }
+
+  if (config.gameType === "coach_bot" && playerSide === WHITE) {
+    setTimeout(() => requestEngineSuggestions(), 500);
   }
 
   return {

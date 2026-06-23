@@ -11,6 +11,7 @@ const MODE_META = {
   online:     { icon: "👥", iconClass: "online",  desc: "Match with a player at your level" },
   casual_bot: { icon: "🤖", iconClass: "bot",     desc: "Pick a difficulty — no rating change" },
   ranked_bot: { icon: "🏆", iconClass: "ranked",  desc: "Bot matched to your rating" },
+  coach_bot:  { icon: "🧠", iconClass: "coach",   desc: "Bot shows best moves to help you learn" },
 };
 
 export function createHomeScreen(config, userInfo, callbacks) {
@@ -65,7 +66,8 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
   const isOnline = gameType === "online";
   const isCasualBot = gameType === "casual_bot";
   const isRankedBot = gameType === "ranked_bot";
-  const isBotGame = isCasualBot || isRankedBot;
+  const isCoachBot = gameType === "coach_bot";
+  const isBotGame = isCasualBot || isRankedBot || isCoachBot;
 
   let activeCat = "blitz";
   if (config.timeControlId) {
@@ -91,7 +93,7 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
     screen.innerHTML = `
       <div class="settings-header">
         <button class="settings-back" id="settings-back">←</button>
-        <div class="settings-title">${isOnline ? "Play vs Player" : isRankedBot ? "Ranked Bot" : "Play vs Bot"}</div>
+        <div class="settings-title">${isOnline ? "Play vs Player" : isRankedBot ? "Ranked Bot" : isCoachBot ? "Coach" : "Play vs Bot"}</div>
       </div>
       <div class="settings-content">
         <div class="settings-section">
@@ -108,6 +110,17 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
           <div class="settings-section">
             <div class="settings-label">Bot Level</div>
             <div class="option-group" id="bot-group"></div>
+          </div>
+        ` : ""}
+
+        ${isCoachBot ? `
+          <div class="settings-section">
+            <div class="settings-label">Bot Level</div>
+            <div class="option-group" id="bot-group"></div>
+          </div>
+          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px;text-align:center;">
+            <div style="font-size:13px;color:#94a3b8;">Play as <strong style="color:#e2e8f0;">White</strong></div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Engine shows best moves with arrows</div>
           </div>
         ` : ""}
 
@@ -180,6 +193,22 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
         sideGroup.appendChild(btn);
       });
 
+      const botGroup = screen.querySelector("#bot-group");
+      BOT_LEVELS.forEach(lvl => {
+        const btn = document.createElement("button");
+        btn.className = `option-btn ${lvl.id === activeBotLevel ? "active" : ""}`;
+        btn.textContent = lvl.label;
+        btn.addEventListener("click", () => {
+          activeBotLevel = lvl.id;
+          config.engine.level = lvl.id;
+          botGroup.querySelectorAll(".option-btn").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+        botGroup.appendChild(btn);
+      });
+    }
+
+    if (isCoachBot) {
       const botGroup = screen.querySelector("#bot-group");
       BOT_LEVELS.forEach(lvl => {
         const btn = document.createElement("button");

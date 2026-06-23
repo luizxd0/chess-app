@@ -435,8 +435,15 @@ function startGame() {
   config.playerName = userInfo.username;
   config.playerElo = userInfo.elo;
   config.engine.enabled = true;
+  config.rated = false;
 
-  if (config.gameType === "ranked_bot") {
+  if (config.gameType === "coach_bot") {
+    config.playerSide = WHITE;
+    config.side = "white";
+    config.engine.elo = 1000;
+    config.engine.depth = 10;
+    config.engine.randomMoveChance = 0;
+  } else if (config.gameType === "ranked_bot") {
     config.rated = true;
     const offset = Math.floor(Math.random() * 51) - 25;
     const botElo = Math.max(500, userInfo.elo + offset);

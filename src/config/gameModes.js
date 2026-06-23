@@ -29,4 +29,5 @@ export const GAME_TYPES = [
   { id: "online", label: "Play vs Player", icon: "👥", desc: "Match with a player at your level" },
   { id: "casual_bot", label: "Play vs Bot", icon: "🤖", desc: "Pick a difficulty — no rating change" },
   { id: "ranked_bot", label: "Ranked Bot", icon: "🏆", desc: "Bot matched to your rating" },
+  { id: "coach_bot", label: "Coach", icon: "🧠", desc: "Bot shows best moves to help you learn" },
 ];

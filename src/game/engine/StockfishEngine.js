@@ -93,6 +93,45 @@ export class StockfishEngine {
     });
   }
 
+  goMultiPV(fen, depth, count) {
+    if (!this.available || !this.worker) return Promise.resolve([]);
+
+    return new Promise((resolve) => {
+      const lines = [];
+      let bestmoveReceived = false;
+
+      const handler = (e) => {
+        const line = e.data;
+        if (line.startsWith("info") && line.includes("multipv")) {
+          const pvMatch = line.match(/multipv (\d+)/);
+          const pvIndex = pvMatch ? parseInt(pvMatch[1]) - 1 : 0;
+          const pvMoveMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+          const scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+          if (pvMoveMatch) {
+            lines[pvIndex] = {
+              move: pvMoveMatch[1],
+              score: scoreMatch ? { type: scoreMatch[1], value: parseInt(scoreMatch[2]) } : null,
+            };
+          }
+        }
+        if (line.startsWith("bestmove")) {
+          this.worker.removeEventListener("message", handler);
+          resolve(lines.filter(Boolean).slice(0, count));
+        }
+      };
+
+      this.worker.addEventListener("message", handler);
+      this.worker.postMessage("ucinewgame");
+      this.worker.postMessage(`setoption name MultiPV value ${count}`);
+      this.worker.postMessage(`position fen ${fen}`);
+      this.worker.postMessage(`go depth ${depth}`);
+
+      setTimeout(() => {
+        this.worker.postMessage("stop");
+      }, Math.max(500, depth * 200));
+    });
+  }
+
   stop() {
     if (this.worker) {
       this.worker.postMessage("stop");
