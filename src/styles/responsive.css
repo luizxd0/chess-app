@@ -1,0 +1,48 @@
+@media (max-width: 600px) {
+  .app {
+    padding: 4px;
+  }
+
+  .player-row {
+    padding: 4px 6px;
+    gap: 4px;
+  }
+
+  .player-name {
+    font-size: 12px;
+  }
+
+  .player-elo {
+    font-size: 10px;
+  }
+
+  .chess-board {
+    border-width: 3px;
+    border-radius: 6px;
+  }
+
+  .coord {
+    font-size: 7px;
+  }
+
+  .piece {
+    font-size: clamp(20px, 8vw, 42px);
+  }
+
+  .captured-piece {
+    font-size: 12px;
+  }
+
+  .clock-box {
+    padding: 1px 6px;
+  }
+
+  .clock-time {
+    font-size: clamp(14px, 3vw, 22px);
+  }
+
+  .label-resigned {
+    font-size: 11px;
+    padding: 2px 10px;
+  }
+}

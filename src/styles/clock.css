@@ -1,0 +1,43 @@
+.clock-box {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 3px solid transparent;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.clock-box.clock-active {
+  border-left-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.clock-box.clock-low .clock-time {
+  color: #ef4444;
+}
+
+.clock-side {
+  font-size: 9px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.clock-time {
+  font-size: clamp(15px, 2.5vw, 26px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #e2e8f0;
+  line-height: 1;
+  letter-spacing: 0.5px;
+}
+
+.clock-box.clock-active .clock-time {
+  color: #fff;
+}

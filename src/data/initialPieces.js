@@ -1,0 +1,37 @@
+export const initialPieces = {
+  "0-0": { symbol: "♜", colorClass: "black-piece", type: "rook" },
+  "0-1": { symbol: "♞", colorClass: "black-piece", type: "knight" },
+  "0-2": { symbol: "♝", colorClass: "black-piece", type: "bishop" },
+  "0-3": { symbol: "♛", colorClass: "black-piece", type: "queen" },
+  "0-4": { symbol: "♚", colorClass: "black-piece", type: "king" },
+  "0-5": { symbol: "♝", colorClass: "black-piece", type: "bishop" },
+  "0-6": { symbol: "♞", colorClass: "black-piece", type: "knight" },
+  "0-7": { symbol: "♜", colorClass: "black-piece", type: "rook" },
+
+  "1-0": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-1": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-2": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-3": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-4": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-5": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-6": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+  "1-7": { symbol: "♟", colorClass: "black-piece", type: "pawn" },
+
+  "6-0": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-1": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-2": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-3": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-4": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-5": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-6": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+  "6-7": { symbol: "♙", colorClass: "white-piece", type: "pawn" },
+
+  "7-0": { symbol: "♖", colorClass: "white-piece", type: "rook" },
+  "7-1": { symbol: "♘", colorClass: "white-piece", type: "knight" },
+  "7-2": { symbol: "♗", colorClass: "white-piece", type: "bishop" },
+  "7-3": { symbol: "♕", colorClass: "white-piece", type: "queen" },
+  "7-4": { symbol: "♔", colorClass: "white-piece", type: "king" },
+  "7-5": { symbol: "♗", colorClass: "white-piece", type: "bishop" },
+  "7-6": { symbol: "♘", colorClass: "white-piece", type: "knight" },
+  "7-7": { symbol: "♖", colorClass: "white-piece", type: "rook" }
+};
