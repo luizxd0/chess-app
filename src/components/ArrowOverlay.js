@@ -61,7 +61,7 @@ export function createArrowOverlay(boardEl, getPiece) {
     const headLen = Math.min(14, len * 0.3);
     const hx = x2 - ux * headLen, hy = y2 - uy * headLen;
     const spread = 5;
-    const sw = Math.min(5, Math.max(3, len * 0.035));
+    const sw = Math.min(8, Math.max(5, len * 0.055));
 
     if (corner) {
       const line1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
