@@ -123,14 +123,16 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   bottomRow.appendChild(bottomMain);
   bottomRow.appendChild(bottomClock);
 
-  function sizeBoard() {
-    const w = board.offsetWidth;
-    if (w > 0) board.style.height = w + "px";
-  }
-
   function render() {
     board.innerHTML = "";
-    sizeBoard();
+    board.style.height = "";
+    const bw = Math.min(
+      (window.innerWidth || 360) - 16,
+      (window.innerHeight || 600) - 140
+    );
+    const px = Math.max(bw, 240) + "px";
+    board.style.width = px;
+    board.style.height = px;
 
     const rows = [...Array(BOARD_SIZE).keys()];
     const cols = [...Array(BOARD_SIZE).keys()];
@@ -443,7 +445,20 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           dragState.dragging = true;
           state.selected = { row, col };
           state.legalMoves = legalMoves;
-          render();
+  render();
+
+  function onResize() {
+    const bw = Math.min(
+      (window.innerWidth || 360) - 16,
+      (window.innerHeight || 600) - 140
+    );
+    const px = Math.max(bw, 240) + "px";
+    if (board.offsetWidth !== parseInt(px)) {
+      board.style.width = px;
+      board.style.height = px;
+    }
+  }
+  window.addEventListener("resize", onResize);
           const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
           const freshPiece = freshCell?.querySelector(".piece");
           if (freshPiece) freshPiece.style.opacity = "0";
@@ -540,9 +555,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   rootElement.appendChild(card);
 
   render();
-
-  const onResize = () => sizeBoard();
-  window.addEventListener("resize", onResize);
 
   function navigateReplay(idx, snapshot) {
     if (!inReplay) {
