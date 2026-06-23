@@ -575,6 +575,7 @@
 @media (max-width: 600px) {
   .app-layout {
     flex-direction: column;
+    overflow-y: auto;
   }
 
   .left-sidebar {
@@ -628,6 +629,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .app-layout.in-game {
+    overflow: hidden;
   }
 
   .app-layout.in-game > .left-sidebar,
