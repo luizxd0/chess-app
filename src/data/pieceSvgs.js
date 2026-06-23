@@ -43,19 +43,24 @@ const SVGS = {
   },
   bishop: {
     white: `<svg viewBox="0 0 45 45" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/>
-        <path d="M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/>
-        <path d="M25.5 8A2.5 2.5 0 1 1 20.5 8a2.5 2.5 0 0 1 5 0z"/>
-      </g>
+      <path d="M22.5 2L20 9h5L22.5 2z" fill="#fff" stroke="#000" stroke-width="1" stroke-linejoin="round"/>
+      <circle cx="22.5" cy="5.5" r="1.5" fill="#000"/>
+      <path d="M17 14c0-4 2.5-8 5.5-8s5.5 4 5.5 8c0 2.5-1 4-2 5.5l-1.5 2h-4l-1.5-2c-1-1.5-2-3-2-5.5z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M16 23c2.5 1.5 10.5 1.5 13 0l1 3c-4 2-11 2-15 0l1-3z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M14 30h17l-1 4H15l-1-4z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M11 37c4.5-1 18.5-1 23 0v-3H11v3z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M20 20h5" stroke="#000" stroke-width="1" stroke-linecap="round"/>
+      <path d="M22.5 16v4" stroke="#000" stroke-width="1" stroke-linecap="round"/>
     </svg>`,
     black: `<svg viewBox="0 0 45 45" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <g fill="#333" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z"/>
-        <path d="M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/>
-        <path d="M25.5 8A2.5 2.5 0 1 1 20.5 8a2.5 2.5 0 0 1 5 0z"/>
-      </g>
-      <path d="M17.5 26h10M15 30h15" stroke="#fff" stroke-width="1" opacity="0.3"/>
+      <path d="M22.5 2L20 9h5L22.5 2z" fill="#333" stroke="#000" stroke-width="1" stroke-linejoin="round"/>
+      <circle cx="22.5" cy="5.5" r="1.5" fill="#000"/>
+      <path d="M17 14c0-4 2.5-8 5.5-8s5.5 4 5.5 8c0 2.5-1 4-2 5.5l-1.5 2h-4l-1.5-2c-1-1.5-2-3-2-5.5z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M16 23c2.5 1.5 10.5 1.5 13 0l1 3c-4 2-11 2-15 0l1-3z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M14 30h17l-1 4H15l-1-4z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M11 37c4.5-1 18.5-1 23 0v-3H11v3z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M20 20h5" stroke="#fff" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+      <path d="M22.5 16v4" stroke="#fff" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
     </svg>`
   },
   knight: {
@@ -74,10 +79,16 @@ const SVGS = {
   },
   pawn: {
     white: `<svg viewBox="0 0 45 45" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="22.5" cy="12.5" r="4" fill="#fff" stroke="#000" stroke-width="1.5"/>
+      <path d="M18.5 20c0 0 1 3 4 3s4-3 4-3l1.5 5H17l1.5-5z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M15 30h15l-1.5 4H16.5L15 30z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M12 37c4.5-1 16.5-1 21 0v-3H12v3z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
     </svg>`,
     black: `<svg viewBox="0 0 45 45" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="22.5" cy="12.5" r="4" fill="#333" stroke="#000" stroke-width="1.5"/>
+      <path d="M18.5 20c0 0 1 3 4 3s4-3 4-3l1.5 5H17l1.5-5z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M15 30h15l-1.5 4H16.5L15 30z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M12 37c4.5-1 16.5-1 21 0v-3H12v3z" fill="#333" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>
     </svg>`
   }
 };
