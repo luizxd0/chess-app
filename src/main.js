@@ -245,6 +245,7 @@ function startOnlineGame() {
   currentMatchmaking.startQueueListener((gameId, mySide, isOfferer) => {
     if (matched) return;
     matched = true;
+    console.log("onMatched called: gameId=", gameId, "mySide=", mySide, "isOfferer=", isOfferer);
 
     if (currentQueueOverlay) {
       currentQueueOverlay._cancel();
@@ -254,6 +255,7 @@ function startOnlineGame() {
     (function tryGetGame(attempt) {
       getGameData(firestore, gameId).then((gameData) => {
         if (!gameData) {
+          console.warn("getGameData attempt", attempt, "returned null for gameId", gameId);
           if (attempt < 3) {
             setTimeout(() => tryGetGame(attempt + 1), 500);
             return;
@@ -276,6 +278,7 @@ function startOnlineGame() {
         config.opponentName = opponent.username;
         config.opponentElo = opponent.elo;
         config.engine.enabled = false;
+        console.log("Starting game against", opponent);
 
         startGameWebRTC(gameId, mySide, isOfferer);
       }).catch((err) => {
