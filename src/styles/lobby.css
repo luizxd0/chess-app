@@ -582,15 +582,35 @@
   .left-sidebar {
     width: 100%;
     flex-direction: row;
-    padding: 8px 12px;
+    align-items: center;
+    padding: 12px 16px;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    overflow-x: auto;
     flex-shrink: 0;
+    gap: 10px;
   }
 
   .nav-profile {
     flex-shrink: 0;
+    margin-bottom: 0;
+  }
+
+  .nav-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+
+  .nav-user-info {
+    display: block;
+  }
+
+  .nav-username {
+    font-size: 13px;
+  }
+
+  .nav-rating {
+    font-size: 11px;
   }
 
   .nav-divider {
@@ -599,16 +619,93 @@
 
   .nav-item {
     flex-shrink: 0;
+    padding: 8px 10px;
+    font-size: 12px;
+    gap: 6px;
+    border-radius: 6px;
+  }
+
+  .nav-icon {
+    font-size: 15px;
+    width: auto;
+  }
+
+  .nav-label {
+    display: none;
   }
 
   .nav-spacer {
+    flex: 1;
+  }
+
+  .main-content {
     display: none;
   }
 
   .right-sidebar {
     width: 100%;
     border-left: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: none;
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .right-title {
+    font-size: 22px;
+    display: none;
+  }
+
+  .game-type-list {
+    gap: 8px;
+  }
+
+  .game-type-btn {
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+
+  .game-type-icon {
+    font-size: 22px;
+  }
+
+  .game-type-label {
+    font-size: 15px;
+  }
+
+  .game-type-desc {
+    font-size: 12px;
+  }
+
+  .right-section {
+    padding-top: 4px;
+  }
+
+  .right-label {
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+
+  .right-btn {
+    padding: 10px 8px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  .play-btn {
+    padding: 14px;
+    font-size: 17px;
+    border-radius: 12px;
+    margin-top: 4px;
+  }
+
+  .cat-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .cat-tabs::-webkit-scrollbar {
+    display: none;
   }
 }
 
