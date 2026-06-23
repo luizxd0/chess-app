@@ -712,6 +712,7 @@
 /* ---- Mobile: Game View ---- */
 @media (max-width: 600px) {
   .board-view {
+    display: flex !important;
     padding: 4px !important;
     max-width: min(100%, calc(100dvh - 130px));
     margin: 0 auto;
