@@ -341,7 +341,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (state.gameOver || gameEnded) return;
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-    engine.goMultiPV(fen, 12, 2).then((moves) => {
+    const suggestDepth = (config.engine.depth || 10) + 5;
+    engine.goMultiPV(fen, suggestDepth, 2).then((moves) => {
       if (gameEnded || state.gameOver) return;
       if (state.turn === playerSide) {
         arrowOverlay.drawEngineArrows(moves);
