@@ -1,4 +1,9 @@
 .piece {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
   font-size: clamp(24px, 5.5vw, 58px);
   line-height: 1;
   user-select: none;

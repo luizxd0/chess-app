@@ -449,20 +449,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           dragState.dragging = true;
           state.selected = { row, col };
           state.legalMoves = legalMoves;
-  render();
-
-  function onResize() {
-    const bw = Math.min(
-      (window.innerWidth || 360) - 16,
-      (window.innerHeight || 600) - 140
-    );
-    const px = Math.max(bw, 240) + "px";
-    if (board.offsetWidth !== parseInt(px)) {
-      board.style.width = px;
-      board.style.height = px;
-    }
-  }
-  window.addEventListener("resize", onResize);
+          render();
           const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
           const freshPiece = freshCell?.querySelector(".piece");
           if (freshPiece) freshPiece.style.opacity = "0";
@@ -515,6 +502,97 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
+  });
+
+  board.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    if (inReplay) { exitReplay(); return; }
+    if (state.gameOver || gameEnded || state.engineThinking) return;
+    const touch = e.touches[0];
+    const pieceEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest(".piece");
+    if (!pieceEl) return;
+    const cell = pieceEl.closest(".cell");
+    if (!cell) return;
+    const row = parseInt(cell.dataset.row);
+    const col = parseInt(cell.dataset.col);
+    const piece = state.pieces[`${row}-${col}`];
+    if (!piece || getPieceColor(piece) !== state.turn) return;
+    if (state.turn !== playerSide && config.engine.enabled) return;
+
+    handledByDrag = false;
+    const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
+    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, startX: touch.clientX, startY: touch.clientY };
+
+    const onTouchMove = (e2) => {
+      e2.preventDefault();
+      const t = e2.touches[0];
+      if (!dragState.dragging) {
+        const dx = t.clientX - dragState.startX;
+        const dy = t.clientY - dragState.startY;
+        if (dx * dx + dy * dy > 25) {
+          dragState.dragging = true;
+          state.selected = { row, col };
+          state.legalMoves = legalMoves;
+          render();
+          const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+          const freshPiece = freshCell?.querySelector(".piece");
+          if (freshPiece) freshPiece.style.opacity = "0";
+          const cellRect = freshCell?.getBoundingClientRect() || cell.getBoundingClientRect();
+          const clone = document.createElement("span");
+          clone.className = `piece ${piece.colorClass} dragging`;
+          clone.textContent = piece.symbol;
+          clone.style.position = "fixed";
+          clone.style.pointerEvents = "none";
+          clone.style.zIndex = 1000;
+          clone.style.left = (t.clientX - cellRect.width / 2) + "px";
+          clone.style.top = (t.clientY - cellRect.height / 2) + "px";
+          clone.style.width = cellRect.width + "px";
+          clone.style.height = cellRect.height + "px";
+          clone.style.display = "flex";
+          clone.style.alignItems = "center";
+          clone.style.justifyContent = "center";
+          clone.style.fontSize = getComputedStyle(freshPiece || pieceEl).fontSize || "40px";
+          document.body.appendChild(clone);
+          dragState.clone = clone;
+        }
+      }
+      if (dragState.clone) {
+        dragState.clone.style.left = (t.clientX - dragState.clone.offsetWidth / 2) + "px";
+        dragState.clone.style.top = (t.clientY - dragState.clone.offsetHeight / 2) + "px";
+      }
+    };
+
+    const onTouchEnd = (e2) => {
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      if (dragState.dragging) {
+        handledByDrag = true;
+        if (dragState.clone) dragState.clone.remove();
+        const t = e2.changedTouches[0];
+        const target = document.elementFromPoint(t.clientX, t.clientY);
+        const targetCell = target?.closest(".cell");
+        if (targetCell) {
+          const tr = parseInt(targetCell.dataset.row);
+          const tc = parseInt(targetCell.dataset.col);
+          if (dragState.legalMoves.some(([r, c]) => r === tr && c === tc)) {
+            doMove(row, col, tr, tc);
+          }
+        }
+        state.selected = null;
+        state.legalMoves = [];
+        render();
+      } else {
+        if (!handledByDrag) {
+          state.selected = { row, col };
+          state.legalMoves = legalMoves;
+          render();
+        }
+      }
+      dragState = null;
+    };
+
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
   });
 
   board.addEventListener("click", (e) => {
