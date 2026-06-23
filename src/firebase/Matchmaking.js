@@ -25,7 +25,6 @@ export function createMatchmaking(firestore, user) {
       elo: user.elo,
       createdAt: serverTimestamp(),
       status: "waiting",
-      matched: false,
     });
   }
 
@@ -49,14 +48,14 @@ export function createMatchmaking(firestore, user) {
     );
 
     queueSnapUnsub = onSnapshot(q, async (snap) => {
-      if (snap.docs.length < 2) return;
-
       const docs = snap.docs;
-      const first = docs[0].data();
-      const second = docs[1].data();
+      if (docs.length < 2) return;
 
-      if (first.status !== "waiting" || second.status !== "waiting") return;
-      if (first.userId !== user.uid) return;
+      const candidates = [docs[0].id, docs[1].id];
+      if (!candidates.includes(user.uid)) return;
+
+      const allWaiting = docs.every(d => d.data().status === "waiting");
+      if (!allWaiting) return;
 
       try {
         await runTransaction(firestore, async (transaction) => {
@@ -71,8 +70,8 @@ export function createMatchmaking(firestore, user) {
 
           transaction.set(doc(firestore, "games", gameId), {
             players: {
-              [side]: { userId: first.userId, username: first.username, elo: first.elo },
-              [otherSide]: { userId: second.userId, username: second.username, elo: second.elo },
+              [side]: { userId: docs[0].data().userId, username: docs[0].data().username, elo: docs[0].data().elo },
+              [otherSide]: { userId: docs[1].data().userId, username: docs[1].data().username, elo: docs[1].data().elo },
             },
             status: "pending",
             offer: null,
@@ -82,24 +81,33 @@ export function createMatchmaking(firestore, user) {
             createdAt: serverTimestamp(),
           });
 
+          transaction.update(docs[0].ref, {
+            status: "matched",
+            gameId,
+            mySide: side,
+            isOfferer: docs[0].id === user.uid,
+          });
           transaction.update(docs[1].ref, {
             status: "matched",
             gameId,
             mySide: otherSide,
+            isOfferer: docs[1].id === user.uid,
           });
-          transaction.delete(docs[0].ref);
-          onMatched(gameId, side, true);
         });
-      } catch (e) {}
+      } catch (e) {
+        console.warn("Matchmaking transaction failed:", e);
+      }
+    }, (err) => {
+      console.error("Queue query error:", err);
     });
 
     ownUnsub = onSnapshot(queueRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      if (data.matched && data.gameId) {
+      if (data.status === "matched" && data.gameId) {
         stopListening();
         deleteDoc(queueRef).catch(() => {});
-        onMatched(data.gameId, data.mySide, false);
+        onMatched(data.gameId, data.mySide, !!data.isOfferer);
       }
     });
   }
