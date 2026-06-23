@@ -123,8 +123,14 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   bottomRow.appendChild(bottomMain);
   bottomRow.appendChild(bottomClock);
 
+  function sizeBoard() {
+    const w = board.offsetWidth;
+    if (w > 0) board.style.height = w + "px";
+  }
+
   function render() {
     board.innerHTML = "";
+    sizeBoard();
 
     const rows = [...Array(BOARD_SIZE).keys()];
     const cols = [...Array(BOARD_SIZE).keys()];
@@ -534,6 +540,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   rootElement.appendChild(card);
 
   render();
+
+  const onResize = () => sizeBoard();
+  window.addEventListener("resize", onResize);
 
   function navigateReplay(idx, snapshot) {
     if (!inReplay) {
