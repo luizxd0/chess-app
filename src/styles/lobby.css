@@ -258,6 +258,7 @@
 .main-content.board-view {
   padding: 16px;
   overflow: hidden;
+  flex-direction: column;
 }
 
 .center-welcome {
