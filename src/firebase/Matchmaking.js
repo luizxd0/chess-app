@@ -104,7 +104,6 @@ export function createMatchmaking(firestore, user) {
     ownUnsub = onSnapshot(queueRef, (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
-      console.log("ownUnsub: status=", data.status, "gameId=", data.gameId, "mySide=", data.mySide, "isOfferer=", data.isOfferer);
       if (data.status === "matched" && data.gameId) {
         stopListening();
         deleteDoc(queueRef).catch(() => {});
