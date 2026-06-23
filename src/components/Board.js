@@ -447,13 +447,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         const dy = e2.clientY - e.clientY;
         if (dx * dx + dy * dy > 25) {
           dragState.dragging = true;
-          state.selected = { row, col };
-          state.legalMoves = legalMoves;
-          render();
-          const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
-          const freshPiece = freshCell?.querySelector(".piece");
-          if (freshPiece) freshPiece.style.opacity = "0";
-          const cellRect = freshCell?.getBoundingClientRect() || cell.getBoundingClientRect();
+          pieceEl.style.opacity = "0";
+          const cellRect = cell.getBoundingClientRect();
           const clone = document.createElement("span");
           clone.className = `piece ${piece.colorClass} dragging`;
           clone.textContent = piece.symbol;
@@ -467,9 +462,15 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           clone.style.display = "flex";
           clone.style.alignItems = "center";
           clone.style.justifyContent = "center";
-          clone.style.fontSize = getComputedStyle(freshPiece || pieceEl).fontSize || "40px";
+          clone.style.fontSize = getComputedStyle(pieceEl).fontSize || "40px";
           document.body.appendChild(clone);
           dragState.clone = clone;
+          state.selected = { row, col };
+          state.legalMoves = legalMoves;
+          render();
+          const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+          const freshPiece = freshCell?.querySelector(".piece");
+          if (freshPiece) freshPiece.style.opacity = "0";
         }
       }
       if (dragState.clone) {
@@ -481,9 +482,10 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const onMouseUp = (e2) => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
-      if (dragState.dragging) {
+      if (dragState && dragState.dragging) {
         handledByDrag = true;
         if (dragState.clone) dragState.clone.remove();
+        pieceEl.style.opacity = "";
         const target = document.elementFromPoint(e2.clientX, e2.clientY);
         const targetCell = target?.closest(".cell");
         if (targetCell) {
@@ -519,25 +521,22 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!piece || getPieceColor(piece) !== state.turn) return;
     if (state.turn !== playerSide && config.engine.enabled) return;
 
+    e.preventDefault();
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
-    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, startX: touch.clientX, startY: touch.clientY };
+    const cellRect = cell.getBoundingClientRect();
+    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, cellRect };
 
     const onTouchMove = (e2) => {
       e2.preventDefault();
+      if (!dragState) return;
       const t = e2.touches[0];
       if (!dragState.dragging) {
-        const dx = t.clientX - dragState.startX;
-        const dy = t.clientY - dragState.startY;
-        if (dx * dx + dy * dy > 25) {
+        const dx = t.clientX - dragState.cellRect.left - dragState.cellRect.width / 2;
+        const dy = t.clientY - dragState.cellRect.top - dragState.cellRect.height / 2;
+        if (dx * dx + dy * dy > 100) {
           dragState.dragging = true;
-          state.selected = { row, col };
-          state.legalMoves = legalMoves;
-          render();
-          const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
-          const freshPiece = freshCell?.querySelector(".piece");
-          if (freshPiece) freshPiece.style.opacity = "0";
-          const cellRect = freshCell?.getBoundingClientRect() || cell.getBoundingClientRect();
+          pieceEl.style.opacity = "0";
           const clone = document.createElement("span");
           clone.className = `piece ${piece.colorClass} dragging`;
           clone.textContent = piece.symbol;
@@ -551,7 +550,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           clone.style.display = "flex";
           clone.style.alignItems = "center";
           clone.style.justifyContent = "center";
-          clone.style.fontSize = getComputedStyle(freshPiece || pieceEl).fontSize || "40px";
+          clone.style.fontSize = getComputedStyle(pieceEl).fontSize || "40px";
           document.body.appendChild(clone);
           dragState.clone = clone;
         }
@@ -565,9 +564,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const onTouchEnd = (e2) => {
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
+      if (!dragState) return;
       if (dragState.dragging) {
         handledByDrag = true;
         if (dragState.clone) dragState.clone.remove();
+        pieceEl.style.opacity = "";
         const t = e2.changedTouches[0];
         const target = document.elementFromPoint(t.clientX, t.clientY);
         const targetCell = target?.closest(".cell");
@@ -580,15 +581,14 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         }
         state.selected = null;
         state.legalMoves = [];
-        render();
       } else {
         if (!handledByDrag) {
           state.selected = { row, col };
           state.legalMoves = legalMoves;
-          render();
         }
       }
       dragState = null;
+      render();
     };
 
     document.addEventListener("touchmove", onTouchMove, { passive: false });
