@@ -615,6 +615,8 @@
 @media (max-width: 600px) {
   .board-view {
     padding: 4px !important;
+    max-width: min(100%, calc(100dvh - 130px));
+    margin: 0 auto;
   }
 
   .board-view .board-card {

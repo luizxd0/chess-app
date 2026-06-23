@@ -193,7 +193,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const bottomVal = bottomPieces.reduce((s, p) => s + ({pawn:1,knight:3,bishop:3,rook:5,queen:9}[p.type]||0), 0);
     topCaptured.render(topPieces, topVal - bottomVal);
     bottomCaptured.render(bottomPieces, bottomVal - topVal);
-    sizeBoard();
   }
 
   function endGame(winner, result) {
@@ -534,22 +533,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   card.appendChild(bottomRow);
   rootElement.appendChild(card);
 
-  requestAnimationFrame(() => {
-    sizeBoard();
-    render();
-  });
-
-  function sizeBoard() {
-    const rowH = topRow.offsetHeight + bottomRow.offsetHeight;
-    const cardW = card.clientWidth;
-    const mobileControls = document.querySelector(".mobile-game-controls");
-    const controlsH = mobileControls ? mobileControls.offsetHeight : 0;
-    const availH = window.innerHeight - rowH - controlsH - 24;
-    const size = Math.max(200, Math.min(cardW, availH, 600));
-    board.style.width = size + "px";
-    board.style.height = size + "px";
-  }
-  window.addEventListener("resize", sizeBoard);
+  render();
 
   function navigateReplay(idx, snapshot) {
     if (!inReplay) {
