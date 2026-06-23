@@ -25,10 +25,6 @@
     font-size: 7px;
   }
 
-  .piece {
-    font-size: clamp(20px, 8vw, 42px);
-  }
-
   .captured-piece {
     font-size: 12px;
   }

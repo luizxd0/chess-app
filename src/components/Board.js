@@ -126,13 +126,19 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   function render() {
     board.innerHTML = "";
     board.style.height = "";
-    const bw = Math.min(
-      (window.innerWidth || 360) - 16,
-      (window.innerHeight || 600) - 140
-    );
-    const px = Math.max(bw, 240) + "px";
-    board.style.width = px;
-    board.style.height = px;
+
+    const vw = window.innerWidth || 360;
+    const vh = window.innerHeight || 600;
+    const isMobile = vw <= 600;
+    const padW = 16;
+    const padH = isMobile ? 110 : 140;
+    const availW = vw - padW;
+    const availH = vh - padH;
+    const px = Math.max(Math.min(availW, availH), 200);
+    board.style.width = px + "px";
+    board.style.height = px + "px";
+    const cellSize = px / 8;
+    board.style.setProperty("--piece-size", (cellSize * 0.82) + "px");
 
     const rows = [...Array(BOARD_SIZE).keys()];
     const cols = [...Array(BOARD_SIZE).keys()];
@@ -467,7 +473,12 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           dragState.clone = clone;
           state.selected = { row, col };
           state.legalMoves = legalMoves;
-          render();
+  render();
+
+  function onResize() {
+    render();
+  }
+  window.addEventListener("resize", onResize);
           const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
           const freshPiece = freshCell?.querySelector(".piece");
           if (freshPiece) freshPiece.style.opacity = "0";
@@ -697,7 +708,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   return {
     cleanup() {
-      window.removeEventListener("resize", sizeBoard);
+      window.removeEventListener("resize", onResize);
       boardWrapper.querySelectorAll(".endgame-label").forEach(el => el.remove());
       if (replay) replay.destroy();
       arrowOverlay.destroy();

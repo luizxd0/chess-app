@@ -2,9 +2,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15em;
-  height: 1.15em;
-  font-size: clamp(24px, 5.5vw, 58px);
+  font-size: var(--piece-size, clamp(24px, 5.5vw, 58px));
+  width: 1em;
+  height: 1em;
   line-height: 1;
   user-select: none;
   transition: transform 0.15s ease;
