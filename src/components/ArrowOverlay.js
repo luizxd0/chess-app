@@ -30,6 +30,7 @@ export function createArrowOverlay(boardEl, getPiece) {
   svg.style.height = "100%";
   svg.style.pointerEvents = "none";
   svg.style.zIndex = "5";
+  svg.style.filter = "drop-shadow(0 1px 3px rgba(0, 0, 0, 0.25))";
 
   const arrows = [];
   let dragStart = null;
@@ -58,10 +59,11 @@ export function createArrowOverlay(boardEl, getPiece) {
     if (len < 5) return g;
 
     const ux = dx / len, uy = dy / len;
-    const headLen = Math.min(14, len * 0.3);
+    const squareSize = getSquareSize();
+    const sw = Math.max(10, Math.round(squareSize * 0.12));
+    const headLen = Math.max(12, Math.round(squareSize * 0.35));
+    const headWidth = Math.max(14, Math.round(squareSize * 0.4));
     const hx = x2 - ux * headLen, hy = y2 - uy * headLen;
-    const spread = 5;
-    const sw = Math.min(8, Math.max(5, len * 0.055));
 
     if (corner) {
       const line1 = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -93,8 +95,8 @@ export function createArrowOverlay(boardEl, getPiece) {
       const head = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
       const pts = [
         `${x2},${y2}`,
-        `${cx + (dx2 / len2) * (len2 - headLen) - uy2 * spread * 0.5},${cy + (dy2 / len2) * (len2 - headLen) + ux2 * spread * 0.5}`,
-        `${cx + (dx2 / len2) * (len2 - headLen) + uy2 * spread * 0.5},${cy + (dy2 / len2) * (len2 - headLen) - ux2 * spread * 0.5}`,
+        `${cx + (dx2 / len2) * (len2 - headLen) - uy2 * headWidth * 0.5},${cy + (dy2 / len2) * (len2 - headLen) + ux2 * headWidth * 0.5}`,
+        `${cx + (dx2 / len2) * (len2 - headLen) + uy2 * headWidth * 0.5},${cy + (dy2 / len2) * (len2 - headLen) - ux2 * headWidth * 0.5}`,
       ].join(" ");
       head.setAttribute("points", pts);
       head.setAttribute("fill", color);
@@ -114,8 +116,8 @@ export function createArrowOverlay(boardEl, getPiece) {
       const head = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
       const pts = [
         `${x2},${y2}`,
-        `${x1 + (dx / len) * (len - headLen) - uy * spread * 0.5},${y1 + (dy / len) * (len - headLen) + ux * spread * 0.5}`,
-        `${x1 + (dx / len) * (len - headLen) + uy * spread * 0.5},${y1 + (dy / len) * (len - headLen) - ux * spread * 0.5}`,
+        `${x1 + (dx / len) * (len - headLen) - uy * headWidth * 0.5},${y1 + (dy / len) * (len - headLen) + ux * headWidth * 0.5}`,
+        `${x1 + (dx / len) * (len - headLen) + uy * headWidth * 0.5},${y1 + (dy / len) * (len - headLen) - ux * headWidth * 0.5}`,
       ].join(" ");
       head.setAttribute("points", pts);
       head.setAttribute("fill", color);
@@ -302,8 +304,8 @@ export function createArrowOverlay(boardEl, getPiece) {
       cellMap[`${c.dataset.row}-${c.dataset.col}`] = c;
     });
 
-    const colors = ["#15803d", "#2563eb"];
-    const opacities = [0.75, 0.55];
+    const colors = ["#6BBF59", "#3B82F6"];
+    const opacities = [0.85, 0.6];
 
     moves.forEach((m, i) => {
       if (!m.move || m.move.length < 4) return;

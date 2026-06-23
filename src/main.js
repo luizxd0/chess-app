@@ -319,10 +319,22 @@ function buildGameScreen() {
 
   const actionsBar = document.createElement("div");
   actionsBar.className = "game-actions-bar";
-  actionsBar.innerHTML = `
-    <button class="action-btn resign-btn" id="game-resign">🏳 Resign</button>
-    <button class="action-btn menu-btn" id="game-back">← Menu</button>
-  `;
+
+  if (config.gameType === "coach_bot") {
+    actionsBar.innerHTML = `
+      <button class="action-btn resign-btn" id="game-resign">🏳 Resign</button>
+      <div class="arrow-toggles">
+        <button class="toggle-btn active" id="toggle-player-arrows" title="Show your best moves">Your Arrows</button>
+        <button class="toggle-btn" id="toggle-enemy-arrows" title="Show opponent's best moves">Enemy Arrows</button>
+      </div>
+      <button class="action-btn menu-btn" id="game-back">← Menu</button>
+    `;
+  } else {
+    actionsBar.innerHTML = `
+      <button class="action-btn resign-btn" id="game-resign">🏳 Resign</button>
+      <button class="action-btn menu-btn" id="game-back">← Menu</button>
+    `;
+  }
 
   gameScreen.appendChild(actionsBar);
 
@@ -344,6 +356,29 @@ function buildGameScreen() {
     cleanupGame();
     showHome();
   });
+
+  if (config.gameType === "coach_bot") {
+    const playerArrowsBtn = actionsBar.querySelector("#toggle-player-arrows");
+    const enemyArrowsBtn = actionsBar.querySelector("#toggle-enemy-arrows");
+
+    if (playerArrowsBtn) {
+      playerArrowsBtn.addEventListener("click", () => {
+        playerArrowsBtn.classList.toggle("active");
+        if (currentBoard) {
+          currentBoard.togglePlayerArrows(playerArrowsBtn.classList.contains("active"));
+        }
+      });
+    }
+
+    if (enemyArrowsBtn) {
+      enemyArrowsBtn.addEventListener("click", () => {
+        enemyArrowsBtn.classList.toggle("active");
+        if (currentBoard) {
+          currentBoard.toggleEnemyArrows(enemyArrowsBtn.classList.contains("active"));
+        }
+      });
+    }
+  }
 
   return gameScreen;
 }

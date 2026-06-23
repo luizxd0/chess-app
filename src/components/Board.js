@@ -40,6 +40,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     engineThinking: false,
     capturedByWhite: [],
     capturedByBlack: [],
+    showPlayerArrows: true,
+    showEnemyArrows: false,
   };
 
   let dragState = null;
@@ -147,6 +149,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   const bottomClock = createSingleClock(clock, playerSide, playerSide);
   bottomBar.appendChild(bottomInfo);
   bottomBar.appendChild(bottomClock);
+
+  function onResize() {
+    render();
+  }
+  window.addEventListener("resize", onResize);
 
   function render() {
     board.innerHTML = "";
@@ -303,6 +310,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const opponent = state.turn;
     state.moveHistory.push(`${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toCol]}`);
 
+    arrowOverlay.clearEngineArrows();
+
     if (isCheckmate(state.pieces, opponent, state.castlingRights, state.enPassantTarget)) {
       endGame(opponent === WHITE ? BLACK : WHITE, "checkmate");
       return;
@@ -328,23 +337,26 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     if (!gameEnded) {
       requestEngineMove();
-      if (state.turn === playerSide) {
-        requestEngineSuggestions();
-      }
+      requestEngineSuggestions();
     }
   }
 
   function requestEngineSuggestions() {
     if (config.gameType !== "coach_bot") return;
     if (!engine || !engine.available) return;
-    if (state.turn !== playerSide) return;
     if (state.gameOver || gameEnded) return;
+
+    const isPlayerTurn = state.turn === playerSide;
+    const isEnemyTurn = state.turn !== playerSide;
+
+    if (isPlayerTurn && !state.showPlayerArrows) return;
+    if (isEnemyTurn && !state.showEnemyArrows) return;
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
     const suggestDepth = (config.engine.depth || 10) + 5;
     engine.goMultiPV(fen, suggestDepth, 2).then((moves) => {
       if (gameEnded || state.gameOver) return;
-      if (state.turn === playerSide) {
+      if ((isPlayerTurn && state.showPlayerArrows) || (isEnemyTurn && state.showEnemyArrows)) {
         arrowOverlay.drawEngineArrows(moves);
       }
     });
@@ -489,7 +501,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!piece || getPieceColor(piece) !== state.turn) return;
     if (state.turn !== playerSide && config.engine.enabled) return;
 
-    arrowOverlay.clearEngineArrows();
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     dragState = { row, col, legalMoves, dragging: false, clone: null, piece };
@@ -521,12 +532,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           dragState.clone = clone;
           state.selected = { row, col };
           state.legalMoves = legalMoves;
-  render();
-
-  function onResize() {
-    render();
-  }
-  window.addEventListener("resize", onResize);
+          render();
           const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
           const freshPiece = freshCell?.querySelector(".piece");
           if (freshPiece) freshPiece.style.opacity = "0";
@@ -581,7 +587,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (state.turn !== playerSide && config.engine.enabled) return;
 
     e.preventDefault();
-    arrowOverlay.clearEngineArrows();
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     const cellRect = cell.getBoundingClientRect();
@@ -674,7 +679,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const piece = state.pieces[`${row}-${col}`];
     if (piece && getPieceColor(piece) === state.turn) {
       if (state.turn !== playerSide && config.engine.enabled) return;
-      arrowOverlay.clearEngineArrows();
       if (state.selected && state.selected.row === row && state.selected.col === col) {
         state.selected = null;
         state.legalMoves = [];
@@ -783,6 +787,22 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     opponentResigned() {
       if (gameEnded) return;
       endGame(playerSide, "resign");
+    },
+    togglePlayerArrows(show) {
+      state.showPlayerArrows = show;
+      if (!show) {
+        arrowOverlay.clearEngineArrows();
+      } else {
+        requestEngineSuggestions();
+      }
+    },
+    toggleEnemyArrows(show) {
+      state.showEnemyArrows = show;
+      if (!show && state.turn !== playerSide) {
+        arrowOverlay.clearEngineArrows();
+      } else {
+        requestEngineSuggestions();
+      }
     },
   };
 }
