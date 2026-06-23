@@ -8,7 +8,7 @@ import { getPlayerElo, setPlayerElo, calculateNewElo, updatePlayerStats } from "
 import { StockfishEngine } from "./game/engine/StockfishEngine.js";
 import { WHITE, BLACK } from "./game/chess.js";
 import { TIME_CONTROLS, BOT_LEVELS } from "./config/gameModes.js";
-import { isLoggedIn, getCurrentUser, clearSession, logout, login, register } from "./auth/Auth.js";
+import { isLoggedIn, getCurrentUser, logout, login, register } from "./auth/Auth.js";
 import { createMatchmaking, getGameData, deleteGame } from "./firebase/Matchmaking.js";
 import { createWebRTC } from "./firebase/WebRTC.js";
 
