@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import firebaseConfig from "./firebase/Config.js";
 import { createBoard } from "./components/Board.js";
-import { createLobby, createLeftSidebar, createQueueOverlay } from "./components/Lobby.js";
+import { createHomeScreen, createSettingsScreen, createQueueOverlay } from "./components/Lobby.js";
 import { initialPieces } from "./data/initialPieces.js";
 import { getPlayerElo, setPlayerElo, calculateNewElo, updatePlayerStats } from "./game/elo.js";
 import { StockfishEngine } from "./game/engine/StockfishEngine.js";
@@ -62,11 +62,6 @@ async function initEngine() {
   return engine;
 }
 
-function getGameTypeLabel() {
-  const labels = { casual_bot: "Casual Bot", ranked_bot: "Ranked Bot", online: "Online" };
-  return labels[config.gameType] || "Casual Bot";
-}
-
 function getSideChoice() {
   if (config.side === "white") return WHITE;
   if (config.side === "black") return BLACK;
@@ -89,6 +84,7 @@ function cleanupGame() {
 function showAuth() {
   cleanupGame();
   el.innerHTML = "";
+  el.className = "app";
 
   const overlay = document.createElement("div");
   overlay.className = "auth-overlay";
@@ -129,11 +125,10 @@ function showAuth() {
 
     overlay.querySelector("#auth-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const isRegister = mode === "register";
       const emailEl = overlay.querySelector("#auth-email");
       const usernameEl = overlay.querySelector("#auth-username");
-      const email = (isRegister ? usernameEl : emailEl).value.trim();
-      const username = (isRegister ? emailEl : usernameEl).value?.trim() || "";
+      const email = (mode === "register" ? usernameEl : emailEl).value.trim();
+      const username = (mode === "register" ? emailEl : usernameEl).value?.trim() || "";
       const password = overlay.querySelector("#auth-password").value;
       const errorEl = overlay.querySelector("#auth-error");
       const btn = overlay.querySelector("#auth-submit");
@@ -151,7 +146,7 @@ function showAuth() {
       btn.textContent = mode === "login" ? "Sign In" : "Create Account";
 
       if (result.success) {
-        showLobby();
+        showHome();
       } else {
         errorEl.textContent = result.error;
       }
@@ -162,26 +157,59 @@ function showAuth() {
   el.appendChild(overlay);
 }
 
-// ========== Lobby ==========
+// ========== Home Screen ==========
 
-function showLobby() {
+function showHome() {
   cleanupGame();
   el.innerHTML = "";
+  el.className = "app";
 
   const user = getCurrentUser();
   const userInfo = user
     ? { username: user.username, elo: user.elo }
     : { username: "Guest", elo: 500 };
 
-  const layout = createLobby(config, userInfo, {
-    onPlay: startGame,
+  const home = createHomeScreen(config, userInfo, {
     onLogout: async () => {
       await logout();
       showAuth();
     },
+    onSelectMode: (gameType) => {
+      config.gameType = gameType;
+      if (gameType === "online") {
+        startOnlineGame();
+      } else {
+        showSettings(gameType);
+      }
+    },
   });
 
-  el.appendChild(layout);
+  const inner = document.createElement("div");
+  inner.className = "app-inner";
+  inner.appendChild(home);
+  el.appendChild(inner);
+}
+
+// ========== Settings Screen ==========
+
+function showSettings(gameType) {
+  el.innerHTML = "";
+  el.className = "app";
+
+  const user = getCurrentUser();
+  const userInfo = user
+    ? { username: user.username, elo: user.elo }
+    : { username: "Guest", elo: 500 };
+
+  const settings = createSettingsScreen(config, gameType, userInfo, {
+    onBack: () => showHome(),
+    onPlay: (cfg) => startGame(),
+  });
+
+  const inner = document.createElement("div");
+  inner.className = "app-inner";
+  inner.appendChild(settings);
+  el.appendChild(inner);
 }
 
 // ========== Queue / Online Game ==========
@@ -205,25 +233,9 @@ function startOnlineGame() {
   el.innerHTML = "";
   el.className = "app";
 
-  const layout = document.createElement("div");
-  layout.className = "app-layout";
-
-  const left = createLeftSidebar(
-    { username: user.username, elo: user.elo },
-    {
-      onLogout: async () => {
-        await logout();
-        cleanupGame();
-        showAuth();
-      },
-    }
-  );
-  layout.appendChild(left);
-
-  const center = document.createElement("main");
-  center.className = "main-content";
-  layout.appendChild(center);
-  el.appendChild(layout);
+  const inner = document.createElement("div");
+  inner.className = "app-inner";
+  el.appendChild(inner);
 
   currentQueueOverlay = createQueueOverlay({
     onCancel: async () => {
@@ -235,7 +247,7 @@ function startOnlineGame() {
         await currentMatchmaking.leaveQueue();
         currentMatchmaking = null;
       }
-      showLobby();
+      showHome();
     },
   });
   document.body.appendChild(currentQueueOverlay);
@@ -258,7 +270,7 @@ function startOnlineGame() {
             return;
           }
           console.error("Match found but game doc missing after 3 retries:", gameId);
-          showLobby();
+          showHome();
           return;
         }
 
@@ -267,7 +279,7 @@ function startOnlineGame() {
         const opponent = players[opponentSide];
         if (!opponent) {
           console.error("Match: opponent data missing", players, mySide);
-          showLobby();
+          showHome();
           return;
         }
         config.playerSide = mySide === "white" ? WHITE : BLACK;
@@ -282,7 +294,7 @@ function startOnlineGame() {
         if (attempt < 3) {
           setTimeout(() => tryGetGame(attempt + 1), 500);
         } else {
-          showLobby();
+          showHome();
         }
       });
     })(0);
@@ -291,74 +303,56 @@ function startOnlineGame() {
   currentMatchmaking.joinQueue();
 }
 
-function startGameWebRTC(gameId, mySide, isOfferer) {
-  const user = getCurrentUser();
+// ========== Build Game Screen (shared by bot + WebRTC) ==========
+
+function buildGameScreen() {
   el.innerHTML = "";
   el.className = "app";
 
-  const layout = document.createElement("div");
-  layout.className = "app-layout";
-  layout.classList.add("in-game");
+  const gameScreen = document.createElement("div");
+  gameScreen.className = "game-screen";
 
-  const left = createLeftSidebar(
-    { username: user.username, elo: user.elo },
-    {
-      onLogout: async () => {
-        await logout();
-        cleanupGame();
-        showAuth();
-      },
-    }
-  );
-  layout.appendChild(left);
-
-  const center = document.createElement("main");
-  center.className = "main-content board-view";
-  layout.appendChild(center);
-
-  const right = document.createElement("aside");
-  right.className = "right-sidebar";
-
-  const opponentLabel = `${config.opponentName} (${config.opponentElo})`;
-  const sideLabel = config.playerSide === WHITE ? "White" : "Black";
-
-  right.innerHTML = `
-    <div class="game-info-panel">
-      <h3 class="game-info-title">Game</h3>
-      <div class="game-info-row">
-        <span class="game-info-label">Type</span>
-        <span class="game-info-value">Online</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">Opponent</span>
-        <span class="game-info-value">${opponentLabel}</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">You play</span>
-        <span class="game-info-value">${sideLabel}</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">Time</span>
-        <span class="game-info-value">${config.timeControl.label}</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">Rated</span>
-        <span class="game-info-value">Yes</span>
-      </div>
-    </div>
-    <div class="game-actions">
-      <button class="play-btn" id="game-resign" style="background:rgba(239,68,68,0.8)">Resign</button>
-      <button class="play-btn" id="game-back" style="background:rgba(255,255,255,0.08);font-size:14px">Main Menu</button>
-    </div>
+  const actionsBar = document.createElement("div");
+  actionsBar.className = "game-actions-bar";
+  actionsBar.innerHTML = `
+    <button class="action-btn resign-btn" id="game-resign">🏳 Resign</button>
+    <button class="action-btn menu-btn" id="game-back">← Menu</button>
   `;
 
-  layout.appendChild(right);
-  el.appendChild(layout);
+  gameScreen.appendChild(actionsBar);
+
+  const inner = document.createElement("div");
+  inner.className = "app-inner";
+  inner.appendChild(gameScreen);
+  el.appendChild(inner);
+
+  actionsBar.querySelector("#game-resign").addEventListener("click", () => {
+    if (currentBoard) {
+      showResignConfirm(() => {
+        currentBoard.resign(config.playerSide);
+        if (currentRtc) currentRtc.sendResign();
+      });
+    }
+  });
+
+  actionsBar.querySelector("#game-back").addEventListener("click", () => {
+    cleanupGame();
+    showHome();
+  });
+
+  return gameScreen;
+}
+
+// ========== WebRTC Game ==========
+
+function startGameWebRTC(gameId, mySide, isOfferer) {
+  const user = getCurrentUser();
+  const boardCard = buildGameScreen();
 
   const pieces = JSON.parse(JSON.stringify(initialPieces));
   currentRtc = createWebRTC(firestore, gameId, mySide, isOfferer);
 
-  currentBoard = createBoard(center, pieces, config, engine, {
+  currentBoard = createBoard(boardCard, pieces, config, engine, {
     onPlayerMove: (fromRow, fromCol, toRow, toCol) => {
       const from = rowColToUci(fromRow, fromCol);
       const to = rowColToUci(toRow, toCol);
@@ -414,45 +408,9 @@ function startGameWebRTC(gameId, mySide, isOfferer) {
   };
 
   currentRtc.init();
-
-  // Desktop resign
-  right.querySelector("#game-resign").addEventListener("click", () => {
-    if (currentBoard) {
-      showResignConfirm(() => {
-        currentBoard.resign(config.playerSide);
-        if (currentRtc) currentRtc.sendResign();
-      });
-    }
-  });
-
-  right.querySelector("#game-back").addEventListener("click", () => {
-    cleanupGame();
-    showLobby();
-  });
-
-  // Mobile controls
-  const mobileControls = document.createElement("div");
-  mobileControls.className = "mobile-game-controls";
-  mobileControls.innerHTML = `
-    <button class="right-btn" id="mobile-resign" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.3);color:#fca5a5">Resign</button>
-    <button class="right-btn" id="mobile-back" style="background:rgba(255,255,255,0.05)">Menu</button>
-  `;
-  mobileControls.querySelector("#mobile-resign").addEventListener("click", () => {
-    if (currentBoard) {
-      showResignConfirm(() => {
-        currentBoard.resign(config.playerSide);
-        if (currentRtc) currentRtc.sendResign();
-      });
-    }
-  });
-  mobileControls.querySelector("#mobile-back").addEventListener("click", () => {
-    cleanupGame();
-    showLobby();
-  });
-  center.appendChild(mobileControls);
 }
 
-// ========== Game Start ==========
+// ========== Bot Game ==========
 
 function startGame() {
   if (config.gameType === "online") {
@@ -460,12 +418,9 @@ function startGame() {
     return;
   }
 
-  el.innerHTML = "";
-  el.className = "app";
-
-  if (!config.isOnline) {
-    config.playerSide = getSideChoice();
-  }
+  config.isOnline = false;
+  config.side = "random";
+  config.playerSide = getSideChoice();
 
   const user = getCurrentUser();
   const userInfo = user
@@ -474,6 +429,7 @@ function startGame() {
 
   config.playerName = userInfo.username;
   config.playerElo = userInfo.elo;
+  config.engine.enabled = true;
 
   if (config.gameType === "ranked_bot") {
     config.rated = true;
@@ -515,79 +471,10 @@ function startGame() {
     }
   }
 
-  const layout = document.createElement("div");
-  layout.className = "app-layout";
-  layout.classList.add("in-game");
-
-  const left = createLeftSidebar(userInfo, {
-    onLogout: async () => {
-      await logout();
-      cleanupGame();
-      showAuth();
-    },
-  });
-  layout.appendChild(left);
-
-  const center = document.createElement("main");
-  center.className = "main-content board-view";
-  layout.appendChild(center);
-
-  const right = document.createElement("aside");
-  right.className = "right-sidebar";
-
-  let opponentLabel;
-  if (config.engine.enabled) {
-    opponentLabel = `Bot (${config.engine.elo})`;
-  } else {
-    opponentLabel = "Player";
-  }
-  const sideLabel = config.playerSide === WHITE ? "White" : "Black";
-
-  right.innerHTML = `
-    <div class="game-info-panel">
-      <h3 class="game-info-title">Game</h3>
-      <div class="game-info-row">
-        <span class="game-info-label">Type</span>
-        <span class="game-info-value">${getGameTypeLabel()}</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">Opponent</span>
-        <span class="game-info-value">${opponentLabel}</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">You play</span>
-        <span class="game-info-value">${sideLabel}</span>
-      </div>
-      <div class="game-info-row">
-        <span class="game-info-label">Time</span>
-        <span class="game-info-value">${config.timeControl.label}</span>
-      </div>
-      ${config.rated ? '<div class="game-info-row"><span class="game-info-label">Rated</span><span class="game-info-value">Yes</span></div>' : '<div class="game-info-row"><span class="game-info-label">Rated</span><span class="game-info-value" style="color:#64748b">No</span></div>'}
-    </div>
-    <div class="game-actions">
-      <button class="play-btn" id="game-resign" style="background:rgba(239,68,68,0.8)">Resign</button>
-      <button class="play-btn" id="game-back" style="background:rgba(255,255,255,0.08);font-size:14px">Main Menu</button>
-    </div>
-  `;
-
-  right.querySelector("#game-resign").addEventListener("click", () => {
-    if (currentBoard) {
-      showResignConfirm(() => {
-        currentBoard.resign(config.playerSide);
-      });
-    }
-  });
-
-  right.querySelector("#game-back").addEventListener("click", () => {
-    cleanupGame();
-    showLobby();
-  });
-
-  layout.appendChild(right);
-  el.appendChild(layout);
+  const boardCard = buildGameScreen();
 
   const pieces = JSON.parse(JSON.stringify(initialPieces));
-  currentBoard = createBoard(center, pieces, config, engine, {
+  currentBoard = createBoard(boardCard, pieces, config, engine, {
     onPlayerMove: () => {},
     onGameOver: (result) => {
       if (config.rated && !config.isOnline) {
@@ -619,26 +506,6 @@ function startGame() {
       }
     },
   });
-
-  // Mobile controls
-  const mobileControls = document.createElement("div");
-  mobileControls.className = "mobile-game-controls";
-  mobileControls.innerHTML = `
-    <button class="right-btn" id="mobile-resign" style="background:rgba(239,68,68,0.25);border-color:rgba(239,68,68,0.3);color:#fca5a5">Resign</button>
-    <button class="right-btn" id="mobile-back" style="background:rgba(255,255,255,0.05)">Menu</button>
-  `;
-  mobileControls.querySelector("#mobile-resign").addEventListener("click", () => {
-    if (currentBoard) {
-      showResignConfirm(() => {
-        currentBoard.resign(config.playerSide);
-      });
-    }
-  });
-  mobileControls.querySelector("#mobile-back").addEventListener("click", () => {
-    cleanupGame();
-    showLobby();
-  });
-  center.appendChild(mobileControls);
 }
 
 // ========== Game Over Modal ==========
@@ -656,7 +523,6 @@ function showGameOverModal(result, oldElo, newElo, rated) {
   let emoji, titleClass, subtitle, eloHtml;
   const isWin = result.winner === result.playerSide;
   const isLoss = result.winner !== null && result.winner !== result.playerSide;
-  const isDraw = result.result === "stalemate" || result.winner === null;
 
   if (isWin) {
     emoji = "\u{1F3C6}";
@@ -688,14 +554,14 @@ function showGameOverModal(result, oldElo, newElo, rated) {
   modal.innerHTML = `
     <div class="game-over-emoji">${emoji}</div>
     <p class="game-over-text ${titleClass}">${subtitle}</p>
-    ${eloHtml ? `<p style="color:#94a3b8;font-size:15px;margin:4px 0 16px">${eloHtml}</p>` : ""}
+    ${eloHtml ? `<p class="game-over-rating">${eloHtml}</p>` : ""}
     ${casualNote}
     <button class="play-again" id="back-to-menu">Main Menu</button>
   `;
 
   modal.querySelector("#back-to-menu").addEventListener("click", () => {
     overlay.remove();
-    showLobby();
+    showHome();
   });
 
   overlay.appendChild(modal);
@@ -706,14 +572,14 @@ function showResignConfirm(onConfirm) {
   const overlay = document.createElement("div");
   overlay.className = "game-over-overlay";
   const modal = document.createElement("div");
-  modal.className = "game-over-modal";
+  modal.className = "game-over-modal resign-modal";
   modal.innerHTML = `
     <div style="font-size:36px;margin-bottom:8px">\u{1F3F3}</div>
     <p style="font-size:18px;font-weight:700;margin:0 0 4px;color:#e2e8f0">Resign?</p>
-    <p style="color:#94a3b8;font-size:14px;margin:0 0 20px">This will count as a loss.</p>
-    <div style="display:flex;gap:8px;justify-content:center">
-      <button class="play-again" id="resign-yes" style="background:#ef4444">Yes, Resign</button>
-      <button class="play-again" id="resign-no" style="background:rgba(255,255,255,0.08);color:#94a3b8">Cancel</button>
+    <p style="color:#94a3b8;font-size:14px;margin:0 0 4px">This will count as a loss.</p>
+    <div class="resign-actions">
+      <button class="play-again resign-yes" id="resign-yes">Yes, Resign</button>
+      <button class="play-again resign-no" id="resign-no">Cancel</button>
     </div>
   `;
   modal.querySelector("#resign-yes").addEventListener("click", () => { overlay.remove(); onConfirm(); });
@@ -727,7 +593,7 @@ function showResignConfirm(onConfirm) {
 el.className = "app";
 
 if (isLoggedIn()) {
-  showLobby();
+  showHome();
 } else {
   showAuth();
 }

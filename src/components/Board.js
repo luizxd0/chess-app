@@ -72,30 +72,43 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
   );
 
-  const card = document.createElement("div");
-  card.className = "board-card";
-
   let opponentLabel = "Player";
+  let opponentElo = "";
   if (config.isOnline) {
-    opponentLabel = `${config.opponentName} (${config.opponentElo})`;
+    opponentLabel = config.opponentName;
+    opponentElo = config.opponentElo;
   } else if (config.engine && config.engine.enabled) {
-    opponentLabel = `Bot (${config.engine.elo})`;
+    opponentLabel = "Bot";
+    opponentElo = config.engine.elo;
   }
   const opponentSide = playerSide === WHITE ? BLACK : WHITE;
 
-  const topRow = document.createElement("div");
-  topRow.className = "player-row";
-  const topMain = document.createElement("div");
-  topMain.className = "player-main";
-  const topName = document.createElement("span");
+  const topBar = document.createElement("div");
+  topBar.className = "player-bar";
+  const topInfo = document.createElement("div");
+  topInfo.className = "player-info";
+  const topAvatar = document.createElement("div");
+  topAvatar.className = "player-avatar";
+  topAvatar.textContent = opponentLabel[0]?.toUpperCase() || "?";
+  const topDetails = document.createElement("div");
+  topDetails.className = "player-details";
+  const topName = document.createElement("div");
   topName.className = "player-name";
   topName.textContent = opponentLabel;
-  topMain.appendChild(topName);
+  topDetails.appendChild(topName);
+  if (opponentElo) {
+    const topElo = document.createElement("div");
+    topElo.className = "player-elo";
+    topElo.textContent = opponentElo;
+    topDetails.appendChild(topElo);
+  }
+  topInfo.appendChild(topAvatar);
+  topInfo.appendChild(topDetails);
   const topCaptured = createCapturedRow();
-  topMain.appendChild(topCaptured.el);
+  topInfo.appendChild(topCaptured.el);
   const topClock = createSingleClock(clock, opponentSide, playerSide);
-  topRow.appendChild(topMain);
-  topRow.appendChild(topClock);
+  topBar.appendChild(topInfo);
+  topBar.appendChild(topClock);
 
   // Board
   const boardWrapper = document.createElement("div");
@@ -108,32 +121,45 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   const arrowOverlay = createArrowOverlay(boardWrapper, (row, col) => state.pieces[`${row}-${col}`] || null);
   boardWrapper.appendChild(arrowOverlay.svg);
 
-  // Bottom player row (you)
-  const bottomRow = document.createElement("div");
-  bottomRow.className = "player-row";
-  const bottomMain = document.createElement("div");
-  bottomMain.className = "player-main";
-  const bottomName = document.createElement("span");
+  // Bottom player bar (you)
+  const bottomBar = document.createElement("div");
+  bottomBar.className = "player-bar";
+  const bottomInfo = document.createElement("div");
+  bottomInfo.className = "player-info";
+  const bottomAvatar = document.createElement("div");
+  bottomAvatar.className = "player-avatar";
+  bottomAvatar.textContent = (config.playerName || "You")[0].toUpperCase();
+  const bottomDetails = document.createElement("div");
+  bottomDetails.className = "player-details";
+  const bottomName = document.createElement("div");
   bottomName.className = "player-name";
-  bottomName.textContent = `${config.playerName} (${config.playerElo})`;
-  bottomMain.appendChild(bottomName);
+  bottomName.textContent = `${config.playerName} (You)`;
+  bottomDetails.appendChild(bottomName);
+  const bottomElo = document.createElement("div");
+  bottomElo.className = "player-elo";
+  bottomElo.textContent = config.playerElo;
+  bottomDetails.appendChild(bottomElo);
+  bottomInfo.appendChild(bottomAvatar);
+  bottomInfo.appendChild(bottomDetails);
   const bottomCaptured = createCapturedRow();
-  bottomMain.appendChild(bottomCaptured.el);
+  bottomInfo.appendChild(bottomCaptured.el);
   const bottomClock = createSingleClock(clock, playerSide, playerSide);
-  bottomRow.appendChild(bottomMain);
-  bottomRow.appendChild(bottomClock);
+  bottomBar.appendChild(bottomInfo);
+  bottomBar.appendChild(bottomClock);
 
   function render() {
     board.innerHTML = "";
     board.style.height = "";
 
     const vw = window.innerWidth || 360;
-    const vh = window.innerHeight || 600;
-    const isMobile = vw <= 600;
-    const padW = 16;
-    const padH = isMobile ? 110 : 140;
-    const availW = vw - padW;
-    const availH = vh - padH;
+    const boardRect = boardWrapper.getBoundingClientRect();
+    let availW = boardRect.width - 16;
+    let availH = boardRect.height - 8;
+    if (availW < 100 || availH < 100) {
+      availW = vw - 16;
+      const vh = window.innerHeight || 600;
+      availH = vh - 160;
+    }
     const px = Math.max(Math.min(availW, availH), 200);
     board.style.width = px + "px";
     board.style.height = px + "px";
@@ -642,10 +668,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
   });
 
-  card.appendChild(topRow);
-  card.appendChild(boardWrapper);
-  card.appendChild(bottomRow);
-  rootElement.appendChild(card);
+  rootElement.appendChild(topBar);
+  rootElement.appendChild(boardWrapper);
+  rootElement.appendChild(bottomBar);
 
   render();
 
