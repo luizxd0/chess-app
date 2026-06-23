@@ -8,7 +8,7 @@ import { getPlayerElo, setPlayerElo, calculateNewElo, updatePlayerStats } from "
 import { StockfishEngine } from "./game/engine/StockfishEngine.js";
 import { WHITE, BLACK } from "./game/chess.js";
 import { TIME_CONTROLS, BOT_LEVELS } from "./config/gameModes.js";
-import { isLoggedIn, getCurrentUser, logout, login, register } from "./auth/Auth.js";
+import { isLoggedIn, getCurrentUser, logout, login, register, initSession } from "./auth/Auth.js";
 import { createMatchmaking, getGameData, deleteGame } from "./firebase/Matchmaking.js";
 import { createWebRTC } from "./firebase/WebRTC.js";
 
@@ -81,7 +81,7 @@ function cleanupGame() {
 
 // ========== Auth ==========
 
-function showAuth() {
+function showAuth(initialError) {
   cleanupGame();
   el.innerHTML = "";
   el.className = "app";
@@ -155,6 +155,11 @@ function showAuth() {
 
   render();
   el.appendChild(overlay);
+
+  if (initialError) {
+    const errEl = overlay.querySelector("#auth-error");
+    if (errEl) errEl.textContent = initialError;
+  }
 }
 
 // ========== Home Screen ==========
@@ -592,10 +597,17 @@ function showResignConfirm(onConfirm) {
 
 el.className = "app";
 
-if (isLoggedIn()) {
-  showHome();
-} else {
-  showAuth();
-}
+(async () => {
+  if (isLoggedIn()) {
+    const result = await initSession();
+    if (result && !result.ok) {
+      showAuth(result.error);
+    } else {
+      showHome();
+    }
+  } else {
+    showAuth();
+  }
 
-initEngine();
+  initEngine();
+})();
