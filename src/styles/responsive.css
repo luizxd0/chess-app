@@ -35,7 +35,8 @@
   }
 
   .captured-piece {
-    font-size: 11px;
+    width: 11px;
+    height: 11px;
   }
 
   .chess-board {

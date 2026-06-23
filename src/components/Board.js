@@ -1,5 +1,6 @@
 import { BOARD_SIZE, FILES, RANKS } from "../config/boardConfig.js";
 import { createPiece } from "./Piece.js";
+import { getPieceSvg } from "../data/pieceSvgs.js";
 import {
   WHITE, BLACK, getLegalMoves, makeMove, getPieceColor,
   isInCheck, isCheckmate, isStalemate, findKing
@@ -483,7 +484,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           const cellRect = cell.getBoundingClientRect();
           const clone = document.createElement("span");
           clone.className = `piece ${piece.colorClass} dragging`;
-          clone.textContent = piece.symbol;
+          const svg = getPieceSvg(piece.type, piece.colorClass);
+          if (svg) clone.innerHTML = svg;
+          else clone.textContent = piece.symbol;
           clone.style.position = "fixed";
           clone.style.pointerEvents = "none";
           clone.style.zIndex = 1000;
@@ -494,7 +497,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           clone.style.display = "flex";
           clone.style.alignItems = "center";
           clone.style.justifyContent = "center";
-          clone.style.fontSize = getComputedStyle(pieceEl).fontSize || "40px";
           document.body.appendChild(clone);
           dragState.clone = clone;
           state.selected = { row, col };
@@ -576,7 +578,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           pieceEl.style.opacity = "0";
           const clone = document.createElement("span");
           clone.className = `piece ${piece.colorClass} dragging`;
-          clone.textContent = piece.symbol;
+          const svg = getPieceSvg(piece.type, piece.colorClass);
+          if (svg) clone.innerHTML = svg;
+          else clone.textContent = piece.symbol;
           clone.style.position = "fixed";
           clone.style.pointerEvents = "none";
           clone.style.zIndex = 1000;
@@ -587,7 +591,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           clone.style.display = "flex";
           clone.style.alignItems = "center";
           clone.style.justifyContent = "center";
-          clone.style.fontSize = getComputedStyle(pieceEl).fontSize || "40px";
           document.body.appendChild(clone);
           dragState.clone = clone;
         }

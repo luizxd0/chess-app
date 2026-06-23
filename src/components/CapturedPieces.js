@@ -1,3 +1,5 @@
+import { getPieceSvg } from "../data/pieceSvgs.js";
+
 const PIECE_VALUES = {
   pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0,
 };
@@ -18,10 +20,12 @@ export function createCapturedRow() {
       container.appendChild(badge);
     }
     for (const p of sorted) {
-      const span = document.createElement("span");
-      span.className = `captured-piece ${p.colorClass}`;
-      span.textContent = p.symbol;
-      container.appendChild(span);
+      const el = document.createElement("span");
+      el.className = "captured-piece";
+      const svg = getPieceSvg(p.type, p.colorClass);
+      if (svg) el.innerHTML = svg;
+      else el.textContent = p.symbol;
+      container.appendChild(el);
     }
   }
 

@@ -118,12 +118,6 @@
   min-height: 16px;
 }
 
-.captured-piece {
-  font-size: 13px;
-  line-height: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
-}
-
 .material-adv {
   font-size: 10px;
   font-weight: 700;
