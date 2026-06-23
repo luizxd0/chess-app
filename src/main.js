@@ -129,8 +129,11 @@ function showAuth() {
 
     overlay.querySelector("#auth-form").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const email = overlay.querySelector("#auth-email").value.trim();
-      const username = (overlay.querySelector("#auth-username") || {}).value?.trim() || "";
+      const isRegister = mode === "register";
+      const emailEl = overlay.querySelector("#auth-email");
+      const usernameEl = overlay.querySelector("#auth-username");
+      const email = (isRegister ? usernameEl : emailEl).value.trim();
+      const username = (isRegister ? emailEl : usernameEl).value?.trim() || "";
       const password = overlay.querySelector("#auth-password").value;
       const errorEl = overlay.querySelector("#auth-error");
       const btn = overlay.querySelector("#auth-submit");
