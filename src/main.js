@@ -251,23 +251,42 @@ function startOnlineGame() {
       currentQueueOverlay = null;
     }
 
-    getGameData(firestore, gameId).then((gameData) => {
-      if (!gameData) {
-        showLobby();
-        return;
-      }
+    (function tryGetGame(attempt) {
+      getGameData(firestore, gameId).then((gameData) => {
+        if (!gameData) {
+          if (attempt < 3) {
+            setTimeout(() => tryGetGame(attempt + 1), 500);
+            return;
+          }
+          console.error("Match found but game doc missing after 3 retries:", gameId);
+          showLobby();
+          return;
+        }
 
-      const players = gameData.players;
-      const opponentSide = mySide === "white" ? "black" : "white";
-      const opponent = players[opponentSide];
-      config.playerSide = mySide === "white" ? WHITE : BLACK;
-      config.side = mySide;
-      config.opponentName = opponent.username;
-      config.opponentElo = opponent.elo;
-      config.engine.enabled = false;
+        const players = gameData.players;
+        const opponentSide = mySide === "white" ? "black" : "white";
+        const opponent = players[opponentSide];
+        if (!opponent) {
+          console.error("Match: opponent data missing", players, mySide);
+          showLobby();
+          return;
+        }
+        config.playerSide = mySide === "white" ? WHITE : BLACK;
+        config.side = mySide;
+        config.opponentName = opponent.username;
+        config.opponentElo = opponent.elo;
+        config.engine.enabled = false;
 
-      startGameWebRTC(gameId, mySide, isOfferer);
-    });
+        startGameWebRTC(gameId, mySide, isOfferer);
+      }).catch((err) => {
+        console.error("getGameData error:", err);
+        if (attempt < 3) {
+          setTimeout(() => tryGetGame(attempt + 1), 500);
+        } else {
+          showLobby();
+        }
+      });
+    })(0);
   });
 
   currentMatchmaking.joinQueue();
