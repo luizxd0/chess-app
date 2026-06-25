@@ -50,6 +50,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   let replay = null;
   let inReplay = false;
   let liveState = null;
+  let suggestionRequestId = 0;
+  let lastSuggestionKey = null;
 
   const history = [];
   function pushSnapshot() {
@@ -310,7 +312,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const opponent = state.turn;
     state.moveHistory.push(`${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toCol]}`);
 
-    arrowOverlay.clearEngineArrows();
+    clearSuggestionArrows();
 
     if (isCheckmate(state.pieces, opponent, state.castlingRights, state.enPassantTarget)) {
       endGame(opponent === WHITE ? BLACK : WHITE, "checkmate");
@@ -341,37 +343,46 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
   }
 
+  function shouldShowSuggestionsForCurrentTurn() {
+    return state.turn === playerSide ? state.showPlayerArrows : state.showEnemyArrows;
+  }
+
+  function clearSuggestionArrows() {
+    suggestionRequestId += 1;
+    lastSuggestionKey = null;
+    arrowOverlay.clearEngineArrows();
+  }
+
   function requestEngineSuggestions() {
     if (config.gameType !== "coach_bot") return;
     if (!engine || !engine.available) return;
-    if (state.gameOver || gameEnded) return;
-
-    const isPlayerTurn = state.turn === playerSide;
-    const isEnemyTurn = state.turn !== playerSide;
-
-    if (isPlayerTurn && !state.showPlayerArrows) return;
-    if (isEnemyTurn && !state.showEnemyArrows) return;
+    if (state.gameOver || gameEnded || inReplay) return;
+    if (!shouldShowSuggestionsForCurrentTurn()) {
+      clearSuggestionArrows();
+      return;
+    }
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
+    const suggestionKey = JSON.stringify([state.turn, fen]);
+    if (lastSuggestionKey === suggestionKey) return;
+    lastSuggestionKey = suggestionKey;
+    const requestId = ++suggestionRequestId;
+    const turnAtRequest = state.turn;
+
     // Cap suggestion depth to 12 so the search never takes too long regardless
     // of the bot's play depth (e.g. expert uses depth 22, which would be very
     // slow for coaching arrows that just need to be "good enough").
     const suggestDepth = Math.min((config.engine.depth || 10) + 2, 12);
 
-    // onInfo fires on every PV update so we can draw a provisional arrow
-    // almost immediately (within ~100 ms) instead of waiting for bestmove.
-    const onInfo = (moves) => {
-      if (gameEnded || state.gameOver) return;
-      if ((isPlayerTurn && state.showPlayerArrows) || (isEnemyTurn && state.showEnemyArrows)) {
-        requestAnimationFrame(() => arrowOverlay.drawEngineArrows(moves));
+    engine.goMultiPV(fen, suggestDepth, 1).then((moves) => {
+      if (requestId !== suggestionRequestId) return;
+      if (gameEnded || state.gameOver || inReplay) return;
+      if (state.turn !== turnAtRequest) return;
+      if (!shouldShowSuggestionsForCurrentTurn()) {
+        arrowOverlay.clearEngineArrows();
+        return;
       }
-    };
-
-    engine.goMultiPV(fen, suggestDepth, 2, onInfo).then((moves) => {
-      if (gameEnded || state.gameOver) return;
-      if ((isPlayerTurn && state.showPlayerArrows) || (isEnemyTurn && state.showEnemyArrows)) {
-        arrowOverlay.drawEngineArrows(moves);
-      }
+      arrowOverlay.drawEngineArrows((moves || []).slice(0, 1));
     });
   }
 
@@ -740,6 +751,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     state.legalMoves = [];
     state.inCheck = null;
     topName.textContent = `${opponentLabel} — Replay ${idx}/${history.length - 1}`;
+    clearSuggestionArrows();
     render();
   }
 
@@ -759,10 +771,12 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     state.legalMoves = [];
     state.inCheck = null;
     topName.textContent = opponentLabel;
+    clearSuggestionArrows();
     render();
     if (state.turn !== playerSide && !state.gameOver && !gameEnded) {
       requestEngineMove();
     }
+    requestEngineSuggestions();
   }
 
   replay = createReplay(history, { onNavigate: navigateReplay, onExit: exitReplay });
@@ -803,19 +817,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     },
     togglePlayerArrows(show) {
       state.showPlayerArrows = show;
-      if (!show) {
-        arrowOverlay.clearEngineArrows();
-      } else {
-        requestEngineSuggestions();
-      }
+      if (state.turn === playerSide) requestEngineSuggestions();
     },
     toggleEnemyArrows(show) {
       state.showEnemyArrows = show;
-      if (!show && state.turn !== playerSide) {
-        arrowOverlay.clearEngineArrows();
-      } else {
-        requestEngineSuggestions();
-      }
+      if (state.turn !== playerSide) requestEngineSuggestions();
     },
   };
 }
