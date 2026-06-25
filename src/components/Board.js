@@ -353,8 +353,21 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (isEnemyTurn && !state.showEnemyArrows) return;
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-    const suggestDepth = (config.engine.depth || 10) + 5;
-    engine.goMultiPV(fen, suggestDepth, 2).then((moves) => {
+    // Cap suggestion depth to 12 so the search never takes too long regardless
+    // of the bot's play depth (e.g. expert uses depth 22, which would be very
+    // slow for coaching arrows that just need to be "good enough").
+    const suggestDepth = Math.min((config.engine.depth || 10) + 2, 12);
+
+    // onInfo fires on every PV update so we can draw a provisional arrow
+    // almost immediately (within ~100 ms) instead of waiting for bestmove.
+    const onInfo = (moves) => {
+      if (gameEnded || state.gameOver) return;
+      if ((isPlayerTurn && state.showPlayerArrows) || (isEnemyTurn && state.showEnemyArrows)) {
+        requestAnimationFrame(() => arrowOverlay.drawEngineArrows(moves));
+      }
+    };
+
+    engine.goMultiPV(fen, suggestDepth, 2, onInfo).then((moves) => {
       if (gameEnded || state.gameOver) return;
       if ((isPlayerTurn && state.showPlayerArrows) || (isEnemyTurn && state.showEnemyArrows)) {
         arrowOverlay.drawEngineArrows(moves);
