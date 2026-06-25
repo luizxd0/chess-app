@@ -313,6 +313,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     state.moveHistory.push(`${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toCol]}`);
 
     clearSuggestionArrows();
+    arrowOverlay.clearArrows();
 
     if (isCheckmate(state.pieces, opponent, state.castlingRights, state.enPassantTarget)) {
       endGame(opponent === WHITE ? BLACK : WHITE, "checkmate");
@@ -528,107 +529,15 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     return currentPieceEl || null;
   }
 
-  function cleanupDragVisuals(activeDrag) {
-    if (!activeDrag) return;
-    if (activeDrag.clone) activeDrag.clone.remove();
-    if (activeDrag.sourcePieceEl) activeDrag.sourcePieceEl.style.opacity = "";
-    if (activeDrag.hiddenPieceEl) activeDrag.hiddenPieceEl.style.opacity = "";
-    if (typeof activeDrag.row === "number" && typeof activeDrag.col === "number") {
-      const visiblePiece = board.querySelector(`.cell[data-row="${activeDrag.row}"][data-col="${activeDrag.col}"] .piece`);
-      if (visiblePiece) visiblePiece.style.opacity = "";
-    }
-  }
+  // ─── Pointer-event drag & drop (covers mouse and touch uniformly) ──────────
 
-  board.addEventListener("mousedown", (e) => {
+  board.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     if (inReplay) { exitReplay(); return; }
     if (state.gameOver || gameEnded || state.engineThinking) return;
-    const pieceEl = e.target.closest(".piece");
-    if (!pieceEl) return;
-    const cell = pieceEl.closest(".cell");
-    if (!cell) return;
-    const row = parseInt(cell.dataset.row);
-    const col = parseInt(cell.dataset.col);
-    const piece = state.pieces[`${row}-${col}`];
-    if (!piece || getPieceColor(piece) !== state.turn) return;
-    if (state.turn !== playerSide && config.engine.enabled) return;
+    if (dragState) return;
 
-    handledByDrag = false;
-    const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
-    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, sourcePieceEl: pieceEl, hiddenPieceEl: null };
-
-    const onMouseMove = (e2) => {
-      if (!dragState.dragging) {
-        const dx = e2.clientX - e.clientX;
-        const dy = e2.clientY - e.clientY;
-        if (dx * dx + dy * dy > 25) {
-          dragState.dragging = true;
-          pieceEl.style.opacity = "0";
-          const cellRect = cell.getBoundingClientRect();
-          const clone = document.createElement("span");
-          clone.className = `piece ${piece.colorClass} dragging`;
-          const svg = getPieceSvg(piece.type, piece.colorClass);
-          if (svg) clone.innerHTML = svg;
-          else clone.textContent = piece.symbol;
-          clone.style.position = "fixed";
-          clone.style.pointerEvents = "none";
-          clone.style.zIndex = 1000;
-          clone.style.left = (e2.clientX - cellRect.width / 2) + "px";
-          clone.style.top = (e2.clientY - cellRect.height / 2) + "px";
-          clone.style.width = cellRect.width + "px";
-          clone.style.height = cellRect.height + "px";
-          clone.style.display = "flex";
-          clone.style.alignItems = "center";
-          clone.style.justifyContent = "center";
-          document.body.appendChild(clone);
-          dragState.clone = clone;
-          state.selected = { row, col };
-          state.legalMoves = legalMoves;
-          render();
-          dragState.hiddenPieceEl = hideDraggedPieceAt(row, col);
-        }
-      }
-      if (dragState.clone) {
-        dragState.clone.style.left = (e2.clientX - dragState.clone.offsetWidth / 2) + "px";
-        dragState.clone.style.top = (e2.clientY - dragState.clone.offsetHeight / 2) + "px";
-      }
-    };
-
-    const onMouseUp = (e2) => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      const activeDrag = dragState;
-      if (activeDrag && activeDrag.dragging) {
-        handledByDrag = true;
-        cleanupDragVisuals(activeDrag);
-        const target = document.elementFromPoint(e2.clientX, e2.clientY);
-        const targetCell = target?.closest(".cell");
-        if (targetCell) {
-          const tr = parseInt(targetCell.dataset.row);
-          const tc = parseInt(targetCell.dataset.col);
-          if (activeDrag.legalMoves.some(([r, c]) => r === tr && c === tc)) {
-            doMove(row, col, tr, tc);
-          }
-        }
-        state.selected = null;
-        state.legalMoves = [];
-        render();
-      }
-      dragState = null;
-    };
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  });
-
-  board.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1) return;
-    if (inReplay) { exitReplay(); return; }
-    if (state.gameOver || gameEnded || state.engineThinking) return;
-    const touch = e.touches[0];
-    const pieceEl = document.elementFromPoint(touch.clientX, touch.clientY)?.closest(".piece");
-    if (!pieceEl) return;
-    const cell = pieceEl.closest(".cell");
+    const cell = e.target.closest(".cell");
     if (!cell) return;
     const row = parseInt(cell.dataset.row);
     const col = parseInt(cell.dataset.col);
@@ -637,89 +546,107 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (state.turn !== playerSide && config.engine.enabled) return;
 
     e.preventDefault();
-    handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     const cellRect = cell.getBoundingClientRect();
-    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, cellRect, sourcePieceEl: pieceEl, hiddenPieceEl: null };
 
-    const onTouchMove = (e2) => {
-      e2.preventDefault();
-      if (!dragState) return;
-      const t = e2.touches[0];
-      if (!dragState.dragging) {
-        const dx = t.clientX - dragState.cellRect.left - dragState.cellRect.width / 2;
-        const dy = t.clientY - dragState.cellRect.top - dragState.cellRect.height / 2;
-        if (dx * dx + dy * dy > 100) {
-          dragState.dragging = true;
-          pieceEl.style.opacity = "0";
-          const clone = document.createElement("span");
-          clone.className = `piece ${piece.colorClass} dragging`;
-          const svg = getPieceSvg(piece.type, piece.colorClass);
-          if (svg) clone.innerHTML = svg;
-          else clone.textContent = piece.symbol;
-          clone.style.position = "fixed";
-          clone.style.pointerEvents = "none";
-          clone.style.zIndex = 1000;
-          clone.style.left = (t.clientX - cellRect.width / 2) + "px";
-          clone.style.top = (t.clientY - cellRect.height / 2) + "px";
-          clone.style.width = cellRect.width + "px";
-          clone.style.height = cellRect.height + "px";
-          clone.style.display = "flex";
-          clone.style.alignItems = "center";
-          clone.style.justifyContent = "center";
-          document.body.appendChild(clone);
-          dragState.clone = clone;
-          state.selected = { row, col };
-          state.legalMoves = legalMoves;
-          render();
-          dragState.hiddenPieceEl = hideDraggedPieceAt(row, col);
-        }
-      }
-      if (dragState.clone) {
-        dragState.clone.style.left = (t.clientX - dragState.clone.offsetWidth / 2) + "px";
-        dragState.clone.style.top = (t.clientY - dragState.clone.offsetHeight / 2) + "px";
-      }
+    try { board.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+
+    dragState = {
+      pointerId: e.pointerId,
+      row, col, piece, legalMoves,
+      cellW: cellRect.width, cellH: cellRect.height,
+      startX: e.clientX, startY: e.clientY,
+      clone: null, hiddenPieceEl: null, dragging: false,
     };
-
-    const onTouchEnd = (e2) => {
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("touchend", onTouchEnd);
-      const activeDrag = dragState;
-      if (!activeDrag) return;
-      if (activeDrag.dragging) {
-        handledByDrag = true;
-        cleanupDragVisuals(activeDrag);
-        const t = e2.changedTouches[0];
-        const target = document.elementFromPoint(t.clientX, t.clientY);
-        const targetCell = target?.closest(".cell");
-        if (targetCell) {
-          const tr = parseInt(targetCell.dataset.row);
-          const tc = parseInt(targetCell.dataset.col);
-          if (activeDrag.legalMoves.some(([r, c]) => r === tr && c === tc)) {
-            doMove(row, col, tr, tc);
-          }
-        }
-        state.selected = null;
-        state.legalMoves = [];
-      } else {
-        if (!handledByDrag) {
-          state.selected = { row, col };
-          state.legalMoves = legalMoves;
-        }
-      }
-      dragState = null;
-      render();
-    };
-
-    document.addEventListener("touchmove", onTouchMove, { passive: false });
-    document.addEventListener("touchend", onTouchEnd);
+    handledByDrag = false;
   });
 
+  board.addEventListener("pointermove", (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    e.preventDefault();
+
+    if (!dragState.dragging) {
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+      if (dx * dx + dy * dy < 36) return;   // 6px threshold (squared) before drag starts
+
+      dragState.dragging = true;
+
+      const clone = document.createElement("span");
+      clone.className = `piece ${dragState.piece.colorClass} dragging`;
+      const svgContent = getPieceSvg(dragState.piece.type, dragState.piece.colorClass);
+      if (svgContent) clone.innerHTML = svgContent;
+      else clone.textContent = dragState.piece.symbol;
+      clone.style.cssText =
+        `position:fixed;pointer-events:none;z-index:1000;` +
+        `width:${dragState.cellW}px;height:${dragState.cellH}px;` +
+        `display:flex;align-items:center;justify-content:center;` +
+        `left:${e.clientX - dragState.cellW / 2}px;top:${e.clientY - dragState.cellH / 2}px`;
+      document.body.appendChild(clone);
+      dragState.clone = clone;
+
+      state.selected = { row: dragState.row, col: dragState.col };
+      state.legalMoves = dragState.legalMoves;
+      render();
+
+      // render() recreates DOM – hide the source piece in the new DOM.
+      dragState.hiddenPieceEl = hideDraggedPieceAt(dragState.row, dragState.col);
+      return;
+    }
+
+    if (dragState.clone) {
+      const w = dragState.clone.offsetWidth  || dragState.cellW;
+      const h = dragState.clone.offsetHeight || dragState.cellH;
+      dragState.clone.style.left = (e.clientX - w / 2) + "px";
+      dragState.clone.style.top  = (e.clientY - h / 2) + "px";
+    }
+  });
+
+  board.addEventListener("pointerup", (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    _finishDrag(e.clientX, e.clientY, true);
+  });
+
+  board.addEventListener("pointercancel", (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    _finishDrag(0, 0, false);
+  });
+
+  function _finishDrag(cx, cy, tryCommit) {
+    const drag = dragState;
+    dragState = null;
+    if (!drag) return;
+
+    if (drag.clone) drag.clone.remove();
+
+    if (!drag.dragging) return;   // never exceeded threshold → let click handler run
+
+    handledByDrag = true;
+    state.selected = null;
+    state.legalMoves = [];
+
+    if (tryCommit) {
+      const target = document.elementFromPoint(cx, cy);
+      const targetCell = target?.closest(".cell");
+      if (targetCell) {
+        const tr = parseInt(targetCell.dataset.row);
+        const tc = parseInt(targetCell.dataset.col);
+        if (drag.legalMoves.some(([r, c]) => r === tr && c === tc)) {
+          doMove(drag.row, drag.col, tr, tc);
+          return;   // doMove → executeMove → afterMove → render()
+        }
+      }
+    }
+    render();
+  }
+
+  // ─── Click-to-move ───────────────────────────────────────────────────────
+
   board.addEventListener("click", (e) => {
-    if (e.button !== 0) return;
     if (inReplay) { exitReplay(); return; }
     if (state.gameOver || gameEnded || state.engineThinking) return;
     if (handledByDrag) { handledByDrag = false; return; }
+
     const cell = e.target.closest(".cell");
     if (!cell) return;
     const row = parseInt(cell.dataset.row);
@@ -847,11 +774,19 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     },
     togglePlayerArrows(show) {
       state.showPlayerArrows = show;
-      if (state.turn === playerSide) requestEngineSuggestions();
+      if (!show) {
+        clearSuggestionArrows();
+      } else if (state.turn === playerSide) {
+        requestEngineSuggestions();
+      }
     },
     toggleEnemyArrows(show) {
       state.showEnemyArrows = show;
-      if (state.turn !== playerSide) requestEngineSuggestions();
+      if (!show) {
+        clearSuggestionArrows();
+      } else if (state.turn !== playerSide) {
+        requestEngineSuggestions();
+      }
     },
   };
 }

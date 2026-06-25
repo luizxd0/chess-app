@@ -1,26 +1,3 @@
-function isMoveValid(pieceType, pieceColor, dr, dc) {
-  const adr = Math.abs(dr);
-  const adc = Math.abs(dc);
-  switch (pieceType) {
-    case "knight":
-      return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
-    case "bishop":
-      return adr === adc && adr > 0;
-    case "rook":
-      return (adr === 0 && adc > 0) || (adc === 0 && adr > 0);
-    case "queen":
-      return (adr === adc && adr > 0) || (adr === 0 && adc > 0) || (adc === 0 && adr > 0);
-    case "king":
-      return adr <= 1 && adc <= 1 && (adr + adc) > 0;
-    case "pawn": {
-      const forward = pieceColor === "white" ? -1 : 1;
-      return (dr === forward && adc <= 1) || (dr === 2 * forward && dc === 0);
-    }
-    default:
-      return false;
-  }
-}
-
 export function createArrowOverlay(boardEl, getPiece) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.style.position = "absolute";
@@ -167,10 +144,6 @@ export function createArrowOverlay(boardEl, getPiece) {
     return cell;
   }
 
-  function getPieceInfo(row, col) {
-    return getPiece ? getPiece(row, col) : null;
-  }
-
   function isKnightMove(dr, dc) {
     const adr = Math.abs(dr), adc = Math.abs(dc);
     return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
@@ -224,8 +197,7 @@ export function createArrowOverlay(boardEl, getPiece) {
       endX = center.x;
       endY = center.y;
 
-      const piece = getPieceInfo(dragStart.row, dragStart.col);
-      if (piece && isKnightMove(dr, dc)) {
+      if (isKnightMove(dr, dc)) {
         corner = computeKnightCorner(dragStart.x, dragStart.y, endX, endY, dr, dc);
       }
     }
@@ -256,19 +228,15 @@ export function createArrowOverlay(boardEl, getPiece) {
       const tr = parseInt(targetCell.dataset.row);
       const tc = parseInt(targetCell.dataset.col);
       if (tr === dragStart.row && tc === dragStart.col) {
+        // Right-click on same square: remove arrow pointing here, or clear all
         if (!removeArrowAt(dragStart.row, dragStart.col)) {
           clearArrows();
         }
       } else {
-        const piece = getPieceInfo(dragStart.row, dragStart.col);
-        if (!piece) { dragStart = null; return; }
-
-        const color = piece.colorClass ? piece.colorClass.split("-")[0] : "";
+        // Draw an arrow from dragStart square to any target square
+        const end = cellCenter(targetCell);
         const dr = tr - dragStart.row;
         const dc = tc - dragStart.col;
-        if (!isMoveValid(piece.type, color, dr, dc)) { dragStart = null; return; }
-
-        const end = cellCenter(targetCell);
         let corner = null;
         if (isKnightMove(dr, dc)) {
           corner = computeKnightCorner(dragStart.x, dragStart.y, end.x, end.y, dr, dc);
