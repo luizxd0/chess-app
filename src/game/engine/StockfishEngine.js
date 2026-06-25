@@ -9,6 +9,9 @@ export class StockfishEngine {
     this._multiPVHandler = null;
     this._multiPVStopTimer = null;
     this._multiPVActive = false;
+    // Counts how many stop-generated bestmove responses are still in-flight
+    // and should be discarded before processing a real search result.
+    this._multiPVPendingStops = 0;
   }
 
   async init() {
@@ -121,8 +124,15 @@ export class StockfishEngine {
       clearTimeout(this._multiPVStopTimer);
       this._multiPVStopTimer = null;
     }
-    const wasActive = this._multiPVActive;
-    this._multiPVActive = false;
+    if (this._multiPVActive) {
+      // Stopping the engine emits a bestmove response that must be skipped.
+      // Use a counter (not a boolean) so N rapid calls each increment it and
+      // the new handler discards exactly N stale bestmoves before accepting a
+      // real result — no matter how many overlapping calls were made.
+      this.worker.postMessage("stop");
+      this._multiPVPendingStops++;
+      this._multiPVActive = false;
+    }
 
     const MIN_SEARCH_MS = 300;
     const DEPTH_MS_FACTOR = 80;
@@ -133,13 +143,12 @@ export class StockfishEngine {
 
     return new Promise((resolve) => {
       const lines = [];
-      // If there was an active search we send "stop" first; its bestmove
-      // response arrives before our new "go" results so we skip it once.
-      let skipNextBestmove = wasActive;
 
       const handler = (e) => {
         const line = e.data;
         if (line.startsWith("info") && line.includes("multipv")) {
+          // Discard info lines that belong to a search we already cancelled.
+          if (this._multiPVPendingStops > 0) return;
           const pvMatch = line.match(/multipv (\d+)/);
           const pvIndex = pvMatch ? parseInt(pvMatch[1]) - 1 : 0;
           const pvMoveMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
@@ -159,8 +168,9 @@ export class StockfishEngine {
           }
         }
         if (line.startsWith("bestmove")) {
-          if (skipNextBestmove) {
-            skipNextBestmove = false;
+          if (this._multiPVPendingStops > 0) {
+            // Stale bestmove from a previous cancelled search — discard it.
+            this._multiPVPendingStops--;
             return;
           }
           this.worker.removeEventListener("message", handler);
@@ -178,10 +188,6 @@ export class StockfishEngine {
       this._multiPVActive = true;
       this.worker.addEventListener("message", handler);
 
-      if (wasActive) {
-        // Stop the previous search; its bestmove will be skipped by the handler.
-        this.worker.postMessage("stop");
-      }
       this.worker.postMessage("ucinewgame");
       this.worker.postMessage(`setoption name MultiPV value ${count}`);
       this.worker.postMessage(`position fen ${fen}`);
