@@ -369,12 +369,22 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const requestId = ++suggestionRequestId;
     const turnAtRequest = state.turn;
 
-    // Cap suggestion depth to 12 so the search never takes too long regardless
-    // of the bot's play depth (e.g. expert uses depth 22, which would be very
-    // slow for coaching arrows that just need to be "good enough").
-    const suggestDepth = Math.min((config.engine.depth || 10) + 2, 12);
+    // Cap suggestion depth to 8 so the search stays fast regardless of the
+    // bot's play depth (expert uses depth 22).  Depth 8 gives good coaching
+    // arrows in well under a second even on dense positions.
+    const suggestDepth = Math.min((config.engine.depth || 10), 8);
 
-    engine.goMultiPV(fen, suggestDepth, 1).then((moves) => {
+    // Draw provisional arrows as soon as the first PV result arrives so the
+    // user never stares at an empty board while the deeper search finishes.
+    const onInfo = (moves) => {
+      if (requestId !== suggestionRequestId) return;
+      if (gameEnded || state.gameOver || inReplay) return;
+      if (state.turn !== turnAtRequest) return;
+      if (!shouldShowSuggestionsForCurrentTurn()) return;
+      arrowOverlay.drawEngineArrows((moves || []).slice(0, 1));
+    };
+
+    engine.goMultiPV(fen, suggestDepth, 1, onInfo, 600).then((moves) => {
       if (requestId !== suggestionRequestId) return;
       if (gameEnded || state.gameOver || inReplay) return;
       if (state.turn !== turnAtRequest) return;
