@@ -93,12 +93,30 @@ export class StockfishEngine {
     });
   }
 
-  goMultiPV(fen, depth, count) {
+  /**
+   * Run a multi-PV analysis on the given FEN.
+   * @param {string} fen
+   * @param {number} depth
+   * @param {number} count  Number of top moves to return.
+   * @param {function|null} onInfo  Called with current best moves on every PV
+   *   update so the UI can draw provisional arrows immediately without waiting
+   *   for the full search to finish.
+   * @param {number} [maxMs]  Hard time cap in ms (default: 1500).  The engine
+   *   is stopped after this many ms so the UI never waits more than maxMs for
+   *   the final arrows.
+   */
+  goMultiPV(fen, depth, count, onInfo, maxMs) {
     if (!this.available || !this.worker) return Promise.resolve([]);
+
+    const MIN_SEARCH_MS = 500;
+    const DEPTH_MS_FACTOR = 150;
+    const MAX_SEARCH_MS = 2000;
+    const timeLimit = maxMs !== undefined
+      ? maxMs
+      : Math.min(Math.max(MIN_SEARCH_MS, depth * DEPTH_MS_FACTOR), MAX_SEARCH_MS);
 
     return new Promise((resolve) => {
       const lines = [];
-      let bestmoveReceived = false;
 
       const handler = (e) => {
         const line = e.data;
@@ -112,6 +130,13 @@ export class StockfishEngine {
               move: pvMoveMatch[1],
               score: scoreMatch ? { type: scoreMatch[1], value: parseInt(scoreMatch[2]) } : null,
             };
+            // Fire interim callback so the UI can draw a provisional arrow
+            // immediately from the first PV result rather than waiting for
+            // bestmove (which may arrive seconds later at high depths).
+            if (onInfo) {
+              const current = lines.filter(Boolean).slice(0, count);
+              if (current.length > 0) onInfo(current);
+            }
           }
         }
         if (line.startsWith("bestmove")) {
@@ -128,7 +153,7 @@ export class StockfishEngine {
 
       setTimeout(() => {
         this.worker.postMessage("stop");
-      }, Math.max(500, depth * 200));
+      }, timeLimit);
     });
   }
 
