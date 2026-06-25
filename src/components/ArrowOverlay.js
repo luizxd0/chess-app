@@ -162,7 +162,9 @@ export function createArrowOverlay(boardEl, getPiece) {
   }
 
   function getCellFromEl(el) {
-    return el?.closest?.("[data-row]") || null;
+    const cell = el?.closest?.("[data-row]") || null;
+    if (!cell || !boardEl.contains(cell)) return null;
+    return cell;
   }
 
   function getPieceInfo(row, col) {
@@ -233,9 +235,13 @@ export function createArrowOverlay(boardEl, getPiece) {
   }
 
   function handleMouseUp(e) {
-    if (e.button !== 2 || !dragStart) {
-      if (e.button === 0) clearArrows();
-      dragStart = null;
+    if (e.button !== 2) {
+      if (tempPath && tempPath.parentNode) tempPath.remove();
+      tempPath = null;
+      return;
+    }
+
+    if (!dragStart) {
       if (tempPath && tempPath.parentNode) tempPath.remove();
       tempPath = null;
       return;
@@ -279,13 +285,13 @@ export function createArrowOverlay(boardEl, getPiece) {
     e.preventDefault();
   }
 
-  document.addEventListener("mousedown", handleMouseDown);
+  boardEl.addEventListener("mousedown", handleMouseDown);
   document.addEventListener("mousemove", handleMouseMove);
   document.addEventListener("mouseup", handleMouseUp);
   boardEl.addEventListener("contextmenu", handleContextMenu);
 
   function destroy() {
-    document.removeEventListener("mousedown", handleMouseDown);
+    boardEl.removeEventListener("mousedown", handleMouseDown);
     document.removeEventListener("mousemove", handleMouseMove);
     document.removeEventListener("mouseup", handleMouseUp);
     boardEl.removeEventListener("contextmenu", handleContextMenu);

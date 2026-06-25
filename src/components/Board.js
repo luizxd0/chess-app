@@ -521,6 +521,24 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
   }
 
+  function hideDraggedPieceAt(row, col) {
+    const cellEl = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    const currentPieceEl = cellEl?.querySelector(".piece");
+    if (currentPieceEl) currentPieceEl.style.opacity = "0";
+    return currentPieceEl || null;
+  }
+
+  function cleanupDragVisuals(activeDrag) {
+    if (!activeDrag) return;
+    if (activeDrag.clone) activeDrag.clone.remove();
+    if (activeDrag.sourcePieceEl) activeDrag.sourcePieceEl.style.opacity = "";
+    if (activeDrag.hiddenPieceEl) activeDrag.hiddenPieceEl.style.opacity = "";
+    if (typeof activeDrag.row === "number" && typeof activeDrag.col === "number") {
+      const visiblePiece = board.querySelector(`.cell[data-row="${activeDrag.row}"][data-col="${activeDrag.col}"] .piece`);
+      if (visiblePiece) visiblePiece.style.opacity = "";
+    }
+  }
+
   board.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     if (inReplay) { exitReplay(); return; }
@@ -537,7 +555,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
-    dragState = { row, col, legalMoves, dragging: false, clone: null, piece };
+    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, sourcePieceEl: pieceEl, hiddenPieceEl: null };
 
     const onMouseMove = (e2) => {
       if (!dragState.dragging) {
@@ -567,9 +585,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           state.selected = { row, col };
           state.legalMoves = legalMoves;
           render();
-          const freshCell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
-          const freshPiece = freshCell?.querySelector(".piece");
-          if (freshPiece) freshPiece.style.opacity = "0";
+          dragState.hiddenPieceEl = hideDraggedPieceAt(row, col);
         }
       }
       if (dragState.clone) {
@@ -581,16 +597,16 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const onMouseUp = (e2) => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
-      if (dragState && dragState.dragging) {
+      const activeDrag = dragState;
+      if (activeDrag && activeDrag.dragging) {
         handledByDrag = true;
-        if (dragState.clone) dragState.clone.remove();
-        pieceEl.style.opacity = "";
+        cleanupDragVisuals(activeDrag);
         const target = document.elementFromPoint(e2.clientX, e2.clientY);
         const targetCell = target?.closest(".cell");
         if (targetCell) {
           const tr = parseInt(targetCell.dataset.row);
           const tc = parseInt(targetCell.dataset.col);
-          if (dragState.legalMoves.some(([r, c]) => r === tr && c === tc)) {
+          if (activeDrag.legalMoves.some(([r, c]) => r === tr && c === tc)) {
             doMove(row, col, tr, tc);
           }
         }
@@ -624,7 +640,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     handledByDrag = false;
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     const cellRect = cell.getBoundingClientRect();
-    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, cellRect };
+    dragState = { row, col, legalMoves, dragging: false, clone: null, piece, cellRect, sourcePieceEl: pieceEl, hiddenPieceEl: null };
 
     const onTouchMove = (e2) => {
       e2.preventDefault();
@@ -653,6 +669,10 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
           clone.style.justifyContent = "center";
           document.body.appendChild(clone);
           dragState.clone = clone;
+          state.selected = { row, col };
+          state.legalMoves = legalMoves;
+          render();
+          dragState.hiddenPieceEl = hideDraggedPieceAt(row, col);
         }
       }
       if (dragState.clone) {
@@ -664,18 +684,18 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const onTouchEnd = (e2) => {
       document.removeEventListener("touchmove", onTouchMove);
       document.removeEventListener("touchend", onTouchEnd);
-      if (!dragState) return;
-      if (dragState.dragging) {
+      const activeDrag = dragState;
+      if (!activeDrag) return;
+      if (activeDrag.dragging) {
         handledByDrag = true;
-        if (dragState.clone) dragState.clone.remove();
-        pieceEl.style.opacity = "";
+        cleanupDragVisuals(activeDrag);
         const t = e2.changedTouches[0];
         const target = document.elementFromPoint(t.clientX, t.clientY);
         const targetCell = target?.closest(".cell");
         if (targetCell) {
           const tr = parseInt(targetCell.dataset.row);
           const tc = parseInt(targetCell.dataset.col);
-          if (dragState.legalMoves.some(([r, c]) => r === tr && c === tc)) {
+          if (activeDrag.legalMoves.some(([r, c]) => r === tr && c === tc)) {
             doMove(row, col, tr, tc);
           }
         }
