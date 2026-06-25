@@ -17,6 +17,10 @@ import {
 const SESSION_KEY = "chess_session";
 const SESSION_LOCK_KEY = "chess_session_lock";
 
+// Timeout (ms) to wait for Firebase to resolve its persisted auth state on
+// startup.  6 s is generous enough for slow devices / flaky networks.
+const AUTH_STATE_TIMEOUT_MS = 6000;
+
 // Names of IndexedDB databases used by the Firebase JS SDK for auth
 // persistence.  Kept in an array so we can delete all of them on recovery.
 const FIREBASE_IDB_NAMES = [
@@ -284,11 +288,13 @@ export function onAuthChange(callback) {
  * clear all browser data when auth tokens become stale.
  */
 async function clearFirebaseAuthStorage() {
-  // 1. Remove firebase:authUser:* and firebase:* localStorage keys.
+  // 1. Remove firebase:authUser:* localStorage keys (auth persistence).
+  //    Only target auth keys to avoid accidentally clearing unrelated Firebase
+  //    data (e.g. remote-config, installations) that may be harmless.
   const keysToRemove = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && (key.startsWith("firebase:authUser:") || key.startsWith("firebase:"))) {
+    if (key && key.startsWith("firebase:authUser:")) {
       keysToRemove.push(key);
     }
   }
@@ -322,7 +328,7 @@ export async function checkAndRecoverAuth() {
 
     // Wait for Firebase to resolve its persisted auth state (or time out).
     const firebaseUser = await new Promise((resolve, reject) => {
-      const tid = setTimeout(() => reject(new Error("auth-timeout")), 6000);
+      const tid = setTimeout(() => reject(new Error("auth-timeout")), AUTH_STATE_TIMEOUT_MS);
       const unsub = onAuthStateChanged(
         auth,
         (u) => { clearTimeout(tid); unsub(); resolve(u); },

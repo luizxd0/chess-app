@@ -108,7 +108,12 @@ export class StockfishEngine {
   goMultiPV(fen, depth, count, onInfo, maxMs) {
     if (!this.available || !this.worker) return Promise.resolve([]);
 
-    const timeLimit = maxMs !== undefined ? maxMs : Math.min(Math.max(500, depth * 150), 2000);
+    const MIN_SEARCH_MS = 500;
+    const DEPTH_MS_FACTOR = 150;
+    const MAX_SEARCH_MS = 2000;
+    const timeLimit = maxMs !== undefined
+      ? maxMs
+      : Math.min(Math.max(MIN_SEARCH_MS, depth * DEPTH_MS_FACTOR), MAX_SEARCH_MS);
 
     return new Promise((resolve) => {
       const lines = [];
