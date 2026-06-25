@@ -6,6 +6,9 @@ export class StockfishEngine {
     this._pendingEval = null;
     this._lastEval = null;
     this._fen = null;
+    this._multiPVHandler = null;
+    this._multiPVStopTimer = null;
+    this._multiPVActive = false;
   }
 
   async init() {
@@ -101,22 +104,38 @@ export class StockfishEngine {
    * @param {function|null} onInfo  Called with current best moves on every PV
    *   update so the UI can draw provisional arrows immediately without waiting
    *   for the full search to finish.
-   * @param {number} [maxMs]  Hard time cap in ms (default: 1500).  The engine
+   * @param {number} [maxMs]  Hard time cap in ms (default: 800).  The engine
    *   is stopped after this many ms so the UI never waits more than maxMs for
    *   the final arrows.
    */
   goMultiPV(fen, depth, count, onInfo, maxMs) {
     if (!this.available || !this.worker) return Promise.resolve([]);
 
-    const MIN_SEARCH_MS = 500;
-    const DEPTH_MS_FACTOR = 150;
-    const MAX_SEARCH_MS = 2000;
+    // Cancel any in-flight multiPV search before starting a new one so stale
+    // stop timers and orphaned message handlers cannot interfere.
+    if (this._multiPVHandler) {
+      this.worker.removeEventListener("message", this._multiPVHandler);
+      this._multiPVHandler = null;
+    }
+    if (this._multiPVStopTimer !== null) {
+      clearTimeout(this._multiPVStopTimer);
+      this._multiPVStopTimer = null;
+    }
+    const wasActive = this._multiPVActive;
+    this._multiPVActive = false;
+
+    const MIN_SEARCH_MS = 300;
+    const DEPTH_MS_FACTOR = 80;
+    const MAX_SEARCH_MS = 800;
     const timeLimit = maxMs !== undefined
       ? maxMs
       : Math.min(Math.max(MIN_SEARCH_MS, depth * DEPTH_MS_FACTOR), MAX_SEARCH_MS);
 
     return new Promise((resolve) => {
       const lines = [];
+      // If there was an active search we send "stop" first; its bestmove
+      // response arrives before our new "go" results so we skip it once.
+      let skipNextBestmove = wasActive;
 
       const handler = (e) => {
         const line = e.data;
@@ -140,19 +159,39 @@ export class StockfishEngine {
           }
         }
         if (line.startsWith("bestmove")) {
+          if (skipNextBestmove) {
+            skipNextBestmove = false;
+            return;
+          }
           this.worker.removeEventListener("message", handler);
+          if (this._multiPVHandler === handler) this._multiPVHandler = null;
+          if (this._multiPVStopTimer !== null) {
+            clearTimeout(this._multiPVStopTimer);
+            this._multiPVStopTimer = null;
+          }
+          this._multiPVActive = false;
           resolve(lines.filter(Boolean).slice(0, count));
         }
       };
 
+      this._multiPVHandler = handler;
+      this._multiPVActive = true;
       this.worker.addEventListener("message", handler);
+
+      if (wasActive) {
+        // Stop the previous search; its bestmove will be skipped by the handler.
+        this.worker.postMessage("stop");
+      }
       this.worker.postMessage("ucinewgame");
       this.worker.postMessage(`setoption name MultiPV value ${count}`);
       this.worker.postMessage(`position fen ${fen}`);
       this.worker.postMessage(`go depth ${depth}`);
 
-      setTimeout(() => {
-        this.worker.postMessage("stop");
+      this._multiPVStopTimer = setTimeout(() => {
+        this._multiPVStopTimer = null;
+        if (this._multiPVActive) {
+          this.worker.postMessage("stop");
+        }
       }, timeLimit);
     });
   }
