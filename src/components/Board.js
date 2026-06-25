@@ -568,7 +568,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!dragState.dragging) {
       const dx = e.clientX - dragState.startX;
       const dy = e.clientY - dragState.startY;
-      if (dx * dx + dy * dy < 36) return;   // 6 px threshold before drag starts
+      if (dx * dx + dy * dy < 36) return;   // 6px threshold (squared) before drag starts
 
       dragState.dragging = true;
 
@@ -585,7 +585,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       document.body.appendChild(clone);
       dragState.clone = clone;
 
-      state.selected  = { row: dragState.row, col: dragState.col };
+      state.selected = { row: dragState.row, col: dragState.col };
       state.legalMoves = dragState.legalMoves;
       render();
 
@@ -622,7 +622,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!drag.dragging) return;   // never exceeded threshold → let click handler run
 
     handledByDrag = true;
-    state.selected  = null;
+    state.selected = null;
     state.legalMoves = [];
 
     if (tryCommit) {
