@@ -343,7 +343,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
   }
 
-  function shouldShowSuggestionsForTurn() {
+  function shouldShowSuggestionsForCurrentTurn() {
     return state.turn === playerSide ? state.showPlayerArrows : state.showEnemyArrows;
   }
 
@@ -357,13 +357,13 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (config.gameType !== "coach_bot") return;
     if (!engine || !engine.available) return;
     if (state.gameOver || gameEnded || inReplay) return;
-    if (!shouldShowSuggestionsForTurn()) {
+    if (!shouldShowSuggestionsForCurrentTurn()) {
       clearSuggestionArrows();
       return;
     }
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-    const suggestionKey = `${state.turn}|${fen}`;
+    const suggestionKey = JSON.stringify([state.turn, fen]);
     if (lastSuggestionKey === suggestionKey) return;
     lastSuggestionKey = suggestionKey;
     const requestId = ++suggestionRequestId;
@@ -378,7 +378,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       if (requestId !== suggestionRequestId) return;
       if (gameEnded || state.gameOver || inReplay) return;
       if (state.turn !== turnAtRequest) return;
-      if (!shouldShowSuggestionsForTurn()) {
+      if (!shouldShowSuggestionsForCurrentTurn()) {
         arrowOverlay.clearEngineArrows();
         return;
       }
