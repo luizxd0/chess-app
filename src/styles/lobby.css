@@ -798,6 +798,26 @@
   color: #bfdbfe;
 }
 
+@media (max-width: 600px) {
+  .analysis-content {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .analysis-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analysis-btn {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .analysis-moves {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ========== Resign Confirm ========== */
 
 .resign-modal {
