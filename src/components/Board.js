@@ -524,7 +524,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const key = JSON.stringify([state.turn, fen]);
     const timeLeft = clock[state.turn];
     const thinkTime = Math.min(timeLeft / 30, 2000);
-    const engineDepth = config.engine.depth || null;
+    const searchTimeMs = Math.max(100, thinkTime);
 
     const cachedCoachMove = (
       config.gameType === "coach_bot" &&
@@ -544,17 +544,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       }, calcThinkDelay());
       return;
     }
-
-    // Time budget for the search. Strong bots (e.g. Expert at depth 22) can take
-    // far longer than the old fixed 8s cap to reach their target depth in the
-    // browser — previously the cap fired and the bot played a RANDOM move,
-    // which is why Expert didn't actually play like an expert. Instead we let
-    // the engine search, then `stop()` it at the budget and use its
-    // best-move-so-far. A random move is only ever a last resort if the engine
-    // never responds at all.
-    const depthBudget = Math.min(6000, Math.max(1200, (engineDepth || 12) * 250));
-    const timeBudget = Math.max(500, timeLeft / 25);
-    const maxThinkMs = Math.min(depthBudget, timeBudget);
 
     // Thinking delay before engine starts (human-like pause)
     setTimeout(() => {
@@ -580,11 +569,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         }
       };
 
-      // At the time budget, stop the search so the engine returns its best move
-      // found so far (NOT a random move).
+      // `go movetime` should finish on its own; this is only a nudge for a stuck
+      // worker so the safety fallback below remains exceptional.
       const stopTimer = setTimeout(() => {
         if (!done && state.engineThinking && !inReplay) engine.stop();
-      }, maxThinkMs);
+      }, searchTimeMs + 250);
 
       // Absolute last resort if the engine never replies (e.g. it died).
       const safetyTimer = setTimeout(() => {
@@ -598,9 +587,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
             executeMove(fr, fc, tr, tc);
           }
         }
-      }, maxThinkMs + 5000);
+      }, searchTimeMs + 3000);
 
-      engine.goTime(Math.max(100, thinkTime), engineDepth).then(playBestOrFallback);
+      engine.goTime(searchTimeMs).then(playBestOrFallback);
     }, calcThinkDelay());
   }
 
