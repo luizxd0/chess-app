@@ -2,16 +2,18 @@ export class StockfishEngine {
   constructor() {
     this.worker = null;
     this.available = false;
-    this._pendingMove = null;
-    this._pendingEval = null;
-    this._lastEval = null;
     this._fen = null;
-    this._multiPVHandler = null;
-    this._multiPVStopTimer = null;
-    this._multiPVActive = false;
-    // Counts how many stop-generated bestmove responses are still in-flight
-    // and should be discarded before processing a real search result.
-    this._multiPVPendingStops = 0;
+
+    // All searches share one worker, so they must run one-at-a-time. Every
+    // search gets a monotonically increasing id; only the newest id is allowed
+    // to process worker messages. `_busy` tracks whether a `go` is currently
+    // running so a new search can stop it and wait for the engine to go idle
+    // before issuing its own commands (this prevents one search's output from
+    // leaking into another, which previously corrupted the coach arrows).
+    this._seq = 0;
+    this._busy = false;
+    this._currentHandler = null;
+    this._currentAbort = null;
   }
 
   async init() {
@@ -26,28 +28,6 @@ export class StockfishEngine {
 
       this.worker.onmessage = (e) => {
         const line = e.data;
-
-        if (this._pendingMove && line.startsWith("bestmove")) {
-          const cb = this._pendingMove;
-          this._pendingMove = null;
-          cb(line);
-          return;
-        }
-
-        if (this._pendingEval) {
-          if (line.indexOf("score cp") !== -1) {
-            const m = line.match(/score cp (-?\d+)/);
-            if (m) this._lastEval = { type: "cp", value: parseInt(m[1]) };
-          } else if (line.indexOf("score mate") !== -1) {
-            const m = line.match(/score mate (-?\d+)/);
-            if (m) this._lastEval = { type: "mate", value: parseInt(m[1]) };
-          }
-        }
-
-        if (line.startsWith("bestmove")) {
-          this._pendingEval = null;
-        }
-
         if (line === "uciok" || line === "readyok") {
           this.available = true;
         }
@@ -78,6 +58,45 @@ export class StockfishEngine {
     this._fen = fen;
   }
 
+  // Detach the current result handler and abort its pending promise. Called
+  // when a newer search supersedes an in-flight one.
+  _detach() {
+    if (this._currentHandler) {
+      this.worker.removeEventListener("message", this._currentHandler);
+      this._currentHandler = null;
+    }
+    if (this._currentAbort) {
+      const abort = this._currentAbort;
+      this._currentAbort = null;
+      abort();
+    }
+  }
+
+  // Resolve once the worker is guaranteed idle. If a search is running we stop
+  // it and wait for its terminating `bestmove` so its messages can never bleed
+  // into the next search. Falls back after a short delay if the engine was
+  // already idle and emits nothing.
+  _ensureIdle() {
+    this._detach();
+    if (!this._busy || !this.worker) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        this.worker.removeEventListener("message", onIdle);
+        this._busy = false;
+        resolve();
+      };
+      const onIdle = (e) => {
+        if (typeof e.data === "string" && e.data.startsWith("bestmove")) done();
+      };
+      this.worker.addEventListener("message", onIdle);
+      this.worker.postMessage("stop");
+      setTimeout(done, 200);
+    });
+  }
+
   goTime(maxTime, depth) {
     if (!this.available || !this.worker) {
       const move = this.randomMove();
@@ -85,18 +104,43 @@ export class StockfishEngine {
     }
 
     const fen = this._fen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    const seq = ++this._seq;
 
-    return new Promise((resolve) => {
-      this._pendingMove = (line) => resolve(line);
+    return this._ensureIdle().then(() => new Promise((resolve) => {
+      if (seq !== this._seq) { resolve("bestmove 0000"); return; }
+
+      let settled = false;
+      const finish = (val) => {
+        if (settled) return;
+        settled = true;
+        this.worker.removeEventListener("message", handler);
+        if (this._currentHandler === handler) this._currentHandler = null;
+        if (this._currentAbort === abort) this._currentAbort = null;
+        if (seq === this._seq) this._busy = false;
+        resolve(val);
+      };
+      const abort = () => finish("bestmove 0000");
+
+      const handler = (e) => {
+        if (seq !== this._seq) { this.worker.removeEventListener("message", handler); return; }
+        const line = e.data;
+        if (typeof line === "string" && line.startsWith("bestmove")) finish(line);
+      };
+
+      this._currentHandler = handler;
+      this._currentAbort = abort;
+      this._busy = true;
+      this.worker.addEventListener("message", handler);
 
       this.worker.postMessage("ucinewgame");
+      this.worker.postMessage("setoption name MultiPV value 1");
       this.worker.postMessage(`position fen ${fen}`);
       if (depth && depth > 0) {
         this.worker.postMessage(`go depth ${depth}`);
       } else {
         this.worker.postMessage(`go movetime ${Math.max(100, maxTime || 1000)}`);
       }
-    });
+    }));
   }
 
   /**
@@ -107,33 +151,15 @@ export class StockfishEngine {
    * @param {function|null} onInfo  Called with current best moves on every PV
    *   update so the UI can draw provisional arrows immediately without waiting
    *   for the full search to finish.
-   * @param {number} [maxMs]  Hard time cap in ms (default: 800).  The engine
-   *   is stopped after this many ms so the UI never waits more than maxMs for
-   *   the final arrows.
+   * @param {number} [maxMs]  Hard time cap in ms. The engine is stopped after
+   *   this many ms so the UI never waits more than maxMs for the final arrows.
+   * @returns {Promise<Array|null>} Resolves with the best lines, or `null` when
+   *   the search was superseded by a newer one (callers should ignore `null`).
    */
   goMultiPV(fen, depth, count, onInfo, maxMs) {
     if (!this.available || !this.worker) return Promise.resolve([]);
 
-    // Cancel any in-flight multiPV search before starting a new one so stale
-    // stop timers and orphaned message handlers cannot interfere.
-    if (this._multiPVHandler) {
-      this.worker.removeEventListener("message", this._multiPVHandler);
-      this._multiPVHandler = null;
-    }
-    if (this._multiPVStopTimer !== null) {
-      clearTimeout(this._multiPVStopTimer);
-      this._multiPVStopTimer = null;
-    }
-    if (this._multiPVActive) {
-      // Stopping the engine emits a bestmove response that must be skipped.
-      // Use a counter (not a boolean) so N rapid calls each increment it and
-      // the new handler discards exactly N stale bestmoves before accepting a
-      // real result — no matter how many overlapping calls were made.
-      this.worker.postMessage("stop");
-      this._multiPVPendingStops++;
-      this._multiPVActive = false;
-    }
-
+    const seq = ++this._seq;
     const MIN_SEARCH_MS = 300;
     const DEPTH_MS_FACTOR = 80;
     const MAX_SEARCH_MS = 800;
@@ -141,14 +167,33 @@ export class StockfishEngine {
       ? maxMs
       : Math.min(Math.max(MIN_SEARCH_MS, depth * DEPTH_MS_FACTOR), MAX_SEARCH_MS);
 
-    return new Promise((resolve) => {
+    return this._ensureIdle().then(() => new Promise((resolve) => {
+      if (seq !== this._seq) { resolve(null); return; }
+
       const lines = [];
+      let settled = false;
+      let stopTimer = null;
+
+      const finish = (val) => {
+        if (settled) return;
+        settled = true;
+        this.worker.removeEventListener("message", handler);
+        if (this._currentHandler === handler) this._currentHandler = null;
+        if (this._currentAbort === abort) this._currentAbort = null;
+        if (stopTimer !== null) { clearTimeout(stopTimer); stopTimer = null; }
+        if (seq === this._seq) this._busy = false;
+        resolve(val);
+      };
+      // Superseded searches resolve `null` so the caller leaves the existing
+      // arrows untouched (rather than clearing them with an empty result).
+      const abort = () => finish(null);
 
       const handler = (e) => {
+        if (seq !== this._seq) { this.worker.removeEventListener("message", handler); return; }
         const line = e.data;
+        if (typeof line !== "string") return;
+
         if (line.startsWith("info") && line.includes("multipv")) {
-          // Discard info lines that belong to a search we already cancelled.
-          if (this._multiPVPendingStops > 0) return;
           const pvMatch = line.match(/multipv (\d+)/);
           const pvIndex = pvMatch ? parseInt(pvMatch[1]) - 1 : 0;
           const pvMoveMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
@@ -161,34 +206,19 @@ export class StockfishEngine {
               score: scoreMatch ? { type: scoreMatch[1], value: parseInt(scoreMatch[2]) } : null,
               depth: depthValue,
             };
-            // Fire interim callback so the UI can draw a provisional arrow
-            // immediately from the first PV result rather than waiting for
-            // bestmove (which may arrive seconds later at high depths).
             if (onInfo) {
               const current = lines.filter(Boolean).slice(0, count);
               if (current.length > 0) onInfo(current);
             }
           }
-        }
-        if (line.startsWith("bestmove")) {
-          if (this._multiPVPendingStops > 0) {
-            // Stale bestmove from a previous cancelled search — discard it.
-            this._multiPVPendingStops--;
-            return;
-          }
-          this.worker.removeEventListener("message", handler);
-          if (this._multiPVHandler === handler) this._multiPVHandler = null;
-          if (this._multiPVStopTimer !== null) {
-            clearTimeout(this._multiPVStopTimer);
-            this._multiPVStopTimer = null;
-          }
-          this._multiPVActive = false;
-          resolve(lines.filter(Boolean).slice(0, count));
+        } else if (line.startsWith("bestmove")) {
+          finish(lines.filter(Boolean).slice(0, count));
         }
       };
 
-      this._multiPVHandler = handler;
-      this._multiPVActive = true;
+      this._currentHandler = handler;
+      this._currentAbort = abort;
+      this._busy = true;
       this.worker.addEventListener("message", handler);
 
       this.worker.postMessage("ucinewgame");
@@ -196,41 +226,22 @@ export class StockfishEngine {
       this.worker.postMessage(`position fen ${fen}`);
       this.worker.postMessage(`go depth ${depth}`);
 
-      this._multiPVStopTimer = setTimeout(() => {
-        this._multiPVStopTimer = null;
-        if (this._multiPVActive) {
+      stopTimer = setTimeout(() => {
+        stopTimer = null;
+        if (!settled && seq === this._seq) {
           this.worker.postMessage("stop");
+          // The stop should trigger a bestmove → finish(). Hard fallback in
+          // case the engine emits nothing (already idle).
+          setTimeout(() => { finish(lines.filter(Boolean).slice(0, count)); }, 400);
         }
       }, timeLimit);
-    });
+    }));
   }
 
   stop() {
     if (this.worker) {
       this.worker.postMessage("stop");
     }
-  }
-
-  getEval(fen) {
-    if (!this.available || !this.worker) return null;
-
-    return new Promise((resolve) => {
-      this._pendingEval = true;
-      this._lastEval = null;
-
-      const check = () => {
-        if (this._lastEval) {
-          resolve(this._lastEval);
-        } else {
-          setTimeout(check, 50);
-        }
-      };
-      setTimeout(check, 100);
-
-      this.worker.postMessage("ucinewgame");
-      this.worker.postMessage(`position fen ${fen}`);
-      this.worker.postMessage(`go depth 10`);
-    });
   }
 
   randomMove() {

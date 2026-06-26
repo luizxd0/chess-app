@@ -359,13 +359,26 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     switchClock(clock);
 
     if (!gameEnded) {
-      requestEngineMove();
+      // Compute suggestions first (engine still idle) so they can render before
+      // the bot's move search takes over the shared engine worker.
       requestEngineSuggestions();
+      requestEngineMove();
     }
   }
 
   function shouldShowSuggestionsForCurrentTurn() {
     return state.turn === playerSide ? state.showPlayerArrows : state.showEnemyArrows;
+  }
+
+  // A suggestion arrow must always belong to the side whose turn it is. This
+  // guards against ever drawing the opponent's move on your turn even if a
+  // stale/garbled engine result slips through.
+  function moveBelongsToSideToMove(uciMove) {
+    if (!uciMove || uciMove.length < 4) return false;
+    const fromCol = uciMove.charCodeAt(0) - 97;
+    const fromRow = 8 - parseInt(uciMove[1], 10);
+    const piece = state.pieces[`${fromRow}-${fromCol}`];
+    return !!piece && getPieceColor(piece) === state.turn;
   }
 
   function clearSuggestionArrows() {
@@ -381,6 +394,12 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (config.gameType !== "coach_bot") return;
     if (!engine || !engine.available) return;
     if (state.gameOver || gameEnded || inReplay) return;
+
+    // The bot move and the suggestion analysis share a single engine worker.
+    // Never start a suggestion search while the bot is computing its move, or
+    // the two searches corrupt each other. Suggestions are recomputed right
+    // after every move, so they will refresh once the engine is free.
+    if (state.engineThinking) return;
 
     if (!shouldShowSuggestionsForCurrentTurn()) {
       clearSuggestionArrows();
@@ -411,6 +430,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     reportSuggestionDepth(0, captureTurn);
 
     const commit = (moves) => {
+      // `null` means the search was superseded by a newer one — leave the
+      // currently-displayed arrows untouched.
+      if (moves === null) return;
       // Stale if a new search was started, or game/turn state changed.
       if (tok !== suggToken) return;
       if (state.turn !== captureTurn) return;
@@ -419,7 +441,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       const fenNow = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
       if (fenNow !== captureFen) return;
 
-      const normalized = (moves || []).filter((m) => m?.move?.length >= 4).slice(0, 1);
+      const normalized = (moves || [])
+        .filter((m) => m?.move?.length >= 4 && moveBelongsToSideToMove(m.move))
+        .slice(0, 1);
       if (normalized.length === 0) { arrowOverlay.clearEngineArrows(); return; }
 
       const depth = normalized.reduce((d, m) => Math.max(d, m.depth || 0), 0) || null;
@@ -477,14 +501,58 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const thinkTime = Math.min(timeLeft / 30, 2000);
     const engineDepth = config.engine.depth || null;
 
+    // Time budget for the search. Strong bots (e.g. Expert at depth 22) can take
+    // far longer than the old fixed 8s cap to reach their target depth in the
+    // browser — previously the cap fired and the bot played a RANDOM move,
+    // which is why Expert didn't actually play like an expert. Instead we let
+    // the engine search, then `stop()` it at the budget and use its
+    // best-move-so-far. A random move is only ever a last resort if the engine
+    // never responds at all.
+    const depthBudget = Math.min(6000, Math.max(1200, (engineDepth || 12) * 250));
+    const timeBudget = Math.max(500, timeLeft / 25);
+    const maxThinkMs = Math.min(depthBudget, timeBudget);
+
     // Thinking delay before engine starts (human-like pause)
     setTimeout(() => {
       if (!state.engineThinking || inReplay || gameEnded) return;
 
       engine.setPosition(fen);
 
+      let done = false;
+      const playBestOrFallback = (msg) => {
+        if (done) return;
+        done = true;
+        clearTimeout(stopTimer);
+        clearTimeout(safetyTimer);
+        if (!state.engineThinking || inReplay) return;
+        state.engineThinking = false;
+        const move = parseBestMove(msg);
+        if (move && move.length >= 4 && move !== "0000") {
+          const fr = 8 - parseInt(move[1], 10);
+          const fc = move.charCodeAt(0) - 97;
+          const tr = 8 - parseInt(move[3], 10);
+          const tc = move.charCodeAt(2) - 97;
+          if (executeMove(fr, fc, tr, tc)) return;
+        }
+        // Engine returned no usable move — last-resort fallback.
+        const allMoves = getAllMoves();
+        if (allMoves.length > 0) {
+          const [fr, fc, tr, tc] = allMoves[Math.floor(Math.random() * allMoves.length)];
+          executeMove(fr, fc, tr, tc);
+        }
+      };
+
+      // At the time budget, stop the search so the engine returns its best move
+      // found so far (NOT a random move).
+      const stopTimer = setTimeout(() => {
+        if (!done && state.engineThinking && !inReplay) engine.stop();
+      }, maxThinkMs);
+
+      // Absolute last resort if the engine never replies (e.g. it died).
       const safetyTimer = setTimeout(() => {
+        if (done) return;
         if (state.engineThinking && !inReplay) {
+          done = true;
           state.engineThinking = false;
           const allMoves = getAllMoves();
           if (allMoves.length > 0) {
@@ -492,22 +560,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
             executeMove(fr, fc, tr, tc);
           }
         }
-      }, 8000);
+      }, maxThinkMs + 5000);
 
-      engine.goTime(Math.max(100, thinkTime), engineDepth).then((msg) => {
-        clearTimeout(safetyTimer);
-        if (state.engineThinking && !inReplay) {
-          state.engineThinking = false;
-          const move = parseBestMove(msg);
-          if (move && move.length >= 4) {
-            const fr = 8 - parseInt(move[1], 10);
-            const fc = move.charCodeAt(0) - 97;
-            const tr = 8 - parseInt(move[3], 10);
-            const tc = move.charCodeAt(2) - 97;
-            executeMove(fr, fc, tr, tc);
-          }
-        }
-      });
+      engine.goTime(Math.max(100, thinkTime), engineDepth).then(playBestOrFallback);
     }, calcThinkDelay());
   }
 
