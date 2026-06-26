@@ -17,6 +17,17 @@ import {
 const SESSION_KEY = "chess_session";
 const SESSION_LOCK_KEY = "chess_session_lock";
 
+// Timeout (ms) to wait for Firebase to resolve its persisted auth state on
+// startup.  6 s is generous enough for slow devices / flaky networks.
+const AUTH_STATE_TIMEOUT_MS = 6000;
+
+// Names of IndexedDB databases used by the Firebase JS SDK for auth
+// persistence.  Kept in an array so we can delete all of them on recovery.
+const FIREBASE_IDB_NAMES = [
+  "firebaseLocalStorageDb",
+  "firebase-heartbeat-database",
+];
+
 let _auth = null;
 let _firestore = null;
 let _heartbeatInterval = null;
@@ -269,6 +280,91 @@ export function onAuthChange(callback) {
       callback(null);
     }
   });
+}
+
+/**
+ * Remove Firebase auth-related storage without signing the user out of the
+ * Firebase SDK.  This is a targeted recovery that avoids forcing users to
+ * clear all browser data when auth tokens become stale.
+ */
+async function clearFirebaseAuthStorage() {
+  // 1. Remove firebase:authUser:* localStorage keys (auth persistence).
+  //    Only target auth keys to avoid accidentally clearing unrelated Firebase
+  //    data (e.g. remote-config, installations) that may be harmless.
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("firebase:authUser:")) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+  // 2. Delete Firebase IndexedDB databases.
+  for (const dbName of FIREBASE_IDB_NAMES) {
+    try {
+      await new Promise((resolve) => {
+        const req = indexedDB.deleteDatabase(dbName);
+        req.onsuccess = resolve;
+        req.onerror = resolve;
+        req.onblocked = resolve;
+      });
+    } catch {}
+  }
+}
+
+/**
+ * Check Firebase auth state at startup and recover gracefully if the stored
+ * auth token is stale or the Firebase SDK throws (e.g. IndexedDB unavailable).
+ *
+ * Returns:
+ *   { ok: true,  user: FirebaseUser|null } – normal path
+ *   { ok: false, recovered: true }         – storage was cleared; caller
+ *                                            should show the login screen.
+ */
+export async function checkAndRecoverAuth() {
+  try {
+    const auth = getAuthInstance();
+
+    // Wait for Firebase to resolve its persisted auth state (or time out).
+    const firebaseUser = await new Promise((resolve, reject) => {
+      const tid = setTimeout(() => reject(new Error("auth-timeout")), AUTH_STATE_TIMEOUT_MS);
+      const unsub = onAuthStateChanged(
+        auth,
+        (u) => { clearTimeout(tid); unsub(); resolve(u); },
+        (err) => { clearTimeout(tid); unsub(); reject(err); }
+      );
+    });
+
+    if (!firebaseUser) {
+      // Firebase says there is no signed-in user – clear our local cache.
+      clearSession();
+      stopHeartbeat();
+      return { ok: true, user: null };
+    }
+
+    // Firebase user exists; force-refresh the ID token to detect stale tokens
+    // before the user hits a Firestore permission error later.
+    try {
+      await firebaseUser.getIdToken(/* forceRefresh */ true);
+      return { ok: true, user: firebaseUser };
+    } catch (tokenErr) {
+      console.warn("[Auth] Token refresh failed – recovering", tokenErr.code || tokenErr.message);
+      await _doRecovery(auth);
+      return { ok: false, recovered: true };
+    }
+  } catch (err) {
+    console.warn("[Auth] Auth check failed – recovering", err.message);
+    try { await _doRecovery(getAuthInstance()); } catch {}
+    return { ok: false, recovered: true };
+  }
+}
+
+async function _doRecovery(auth) {
+  clearSession();
+  stopHeartbeat();
+  await clearFirebaseAuthStorage();
+  try { await signOut(auth); } catch {}
 }
 
 export async function initSession() {

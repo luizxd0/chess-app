@@ -1,26 +1,3 @@
-function isMoveValid(pieceType, pieceColor, dr, dc) {
-  const adr = Math.abs(dr);
-  const adc = Math.abs(dc);
-  switch (pieceType) {
-    case "knight":
-      return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
-    case "bishop":
-      return adr === adc && adr > 0;
-    case "rook":
-      return (adr === 0 && adc > 0) || (adc === 0 && adr > 0);
-    case "queen":
-      return (adr === adc && adr > 0) || (adr === 0 && adc > 0) || (adc === 0 && adr > 0);
-    case "king":
-      return adr <= 1 && adc <= 1 && (adr + adc) > 0;
-    case "pawn": {
-      const forward = pieceColor === "white" ? -1 : 1;
-      return (dr === forward && adc <= 1) || (dr === 2 * forward && dc === 0);
-    }
-    default:
-      return false;
-  }
-}
-
 export function createArrowOverlay(boardEl, getPiece) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.style.position = "absolute";
@@ -32,9 +9,18 @@ export function createArrowOverlay(boardEl, getPiece) {
   svg.style.zIndex = "5";
   svg.style.filter = "drop-shadow(0 1px 3px rgba(0, 0, 0, 0.25))";
 
+  const manualLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  const engineLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(manualLayer);
+  svg.appendChild(engineLayer);
+
   const arrows = [];
   let dragStart = null;
   let tempPath = null;
+  let boardRectCache = null;
+  let cellCenterCache = new Map();
+  let rafMouseEvent = null;
+  let rafId = 0;
 
   function getSquareSize() {
     const first = boardEl.querySelector("[data-row]");
@@ -43,12 +29,29 @@ export function createArrowOverlay(boardEl, getPiece) {
   }
 
   function cellCenter(cell) {
-    const rect = boardEl.getBoundingClientRect();
+    const rect = boardRectCache || boardEl.getBoundingClientRect();
     const cellRect = cell.getBoundingClientRect();
     return {
       x: cellRect.left - rect.left + cellRect.width / 2,
       y: cellRect.top - rect.top + cellRect.height / 2,
     };
+  }
+
+  function refreshGeometry() {
+    boardRectCache = boardEl.getBoundingClientRect();
+    const next = new Map();
+    const cells = boardEl.querySelectorAll("[data-row]");
+    cells.forEach((cell) => {
+      const key = `${cell.dataset.row}-${cell.dataset.col}`;
+      next.set(key, cellCenter(cell));
+    });
+    cellCenterCache = next;
+  }
+
+  function getCachedCenter(row, col) {
+    const key = `${row}-${col}`;
+    if (!cellCenterCache.has(key)) refreshGeometry();
+    return cellCenterCache.get(key) || null;
   }
 
   function createArrowEl(x1, y1, x2, y2, corner, color = "#ffd700", opacity = 0.7, dashed = false) {
@@ -129,9 +132,9 @@ export function createArrowOverlay(boardEl, getPiece) {
   }
 
   function drawAllArrows() {
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    while (manualLayer.firstChild) manualLayer.removeChild(manualLayer.firstChild);
     for (const a of arrows) {
-      svg.appendChild(createArrowEl(a.x1, a.y1, a.x2, a.y2, a.corner));
+      manualLayer.appendChild(createArrowEl(a.x1, a.y1, a.x2, a.y2, a.corner));
     }
   }
 
@@ -141,15 +144,8 @@ export function createArrowOverlay(boardEl, getPiece) {
   }
 
   function removeArrowAt(row, col) {
-    const cells = boardEl.querySelectorAll("[data-row]");
-    let targetCell = null;
-    for (const c of cells) {
-      if (parseInt(c.dataset.row) === row && parseInt(c.dataset.col) === col) {
-        targetCell = c; break;
-      }
-    }
-    if (!targetCell) return false;
-    const pt = cellCenter(targetCell);
+    const pt = getCachedCenter(row, col);
+    if (!pt) return false;
     for (let i = arrows.length - 1; i >= 0; i--) {
       const dx = arrows[i].x2 - pt.x, dy = arrows[i].y2 - pt.y;
       if (dx * dx + dy * dy < 400) {
@@ -162,11 +158,9 @@ export function createArrowOverlay(boardEl, getPiece) {
   }
 
   function getCellFromEl(el) {
-    return el?.closest?.("[data-row]") || null;
-  }
-
-  function getPieceInfo(row, col) {
-    return getPiece ? getPiece(row, col) : null;
+    const cell = el?.closest?.("[data-row]") || null;
+    if (!cell || !boardEl.contains(cell)) return null;
+    return cell;
   }
 
   function isKnightMove(dr, dc) {
@@ -186,7 +180,8 @@ export function createArrowOverlay(boardEl, getPiece) {
     const cell = getCellFromEl(e.target);
     if (!cell) return;
 
-    const rect = boardEl.getBoundingClientRect();
+    boardRectCache = boardEl.getBoundingClientRect();
+    const rect = boardRectCache;
     const cellRect = cell.getBoundingClientRect();
     dragStart = {
       row: parseInt(cell.dataset.row),
@@ -201,7 +196,7 @@ export function createArrowOverlay(boardEl, getPiece) {
 
   function handleMouseMove(e) {
     if (!dragStart) return;
-    const rect = boardEl.getBoundingClientRect();
+    const rect = boardRectCache || boardEl.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
@@ -222,20 +217,34 @@ export function createArrowOverlay(boardEl, getPiece) {
       endX = center.x;
       endY = center.y;
 
-      const piece = getPieceInfo(dragStart.row, dragStart.col);
-      if (piece && isKnightMove(dr, dc)) {
+      if (isKnightMove(dr, dc)) {
         corner = computeKnightCorner(dragStart.x, dragStart.y, endX, endY, dr, dc);
       }
     }
 
     tempPath = createArrowEl(dragStart.x, dragStart.y, endX, endY, corner, "#ffd700", 0.5, true);
-    svg.appendChild(tempPath);
+    manualLayer.appendChild(tempPath);
+  }
+
+  function handleMouseMoveRaf(e) {
+    rafMouseEvent = e;
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      if (!rafMouseEvent) return;
+      handleMouseMove(rafMouseEvent);
+      rafMouseEvent = null;
+    });
   }
 
   function handleMouseUp(e) {
-    if (e.button !== 2 || !dragStart) {
-      if (e.button === 0) clearArrows();
-      dragStart = null;
+    if (e.button !== 2) {
+      if (tempPath && tempPath.parentNode) tempPath.remove();
+      tempPath = null;
+      return;
+    }
+
+    if (!dragStart) {
       if (tempPath && tempPath.parentNode) tempPath.remove();
       tempPath = null;
       return;
@@ -250,19 +259,15 @@ export function createArrowOverlay(boardEl, getPiece) {
       const tr = parseInt(targetCell.dataset.row);
       const tc = parseInt(targetCell.dataset.col);
       if (tr === dragStart.row && tc === dragStart.col) {
+        // Right-click on same square: remove arrow pointing here, or clear all
         if (!removeArrowAt(dragStart.row, dragStart.col)) {
           clearArrows();
         }
       } else {
-        const piece = getPieceInfo(dragStart.row, dragStart.col);
-        if (!piece) { dragStart = null; return; }
-
-        const color = piece.colorClass ? piece.colorClass.split("-")[0] : "";
+        // Draw an arrow from dragStart square to any target square
+        const end = cellCenter(targetCell);
         const dr = tr - dragStart.row;
         const dc = tc - dragStart.col;
-        if (!isMoveValid(piece.type, color, dr, dc)) { dragStart = null; return; }
-
-        const end = cellCenter(targetCell);
         let corner = null;
         if (isKnightMove(dr, dc)) {
           corner = computeKnightCorner(dragStart.x, dragStart.y, end.x, end.y, dr, dc);
@@ -279,30 +284,42 @@ export function createArrowOverlay(boardEl, getPiece) {
     e.preventDefault();
   }
 
-  document.addEventListener("mousedown", handleMouseDown);
-  document.addEventListener("mousemove", handleMouseMove);
+  boardEl.addEventListener("mousedown", handleMouseDown);
+  document.addEventListener("mousemove", handleMouseMoveRaf);
   document.addEventListener("mouseup", handleMouseUp);
   boardEl.addEventListener("contextmenu", handleContextMenu);
 
   function destroy() {
-    document.removeEventListener("mousedown", handleMouseDown);
-    document.removeEventListener("mousemove", handleMouseMove);
+    boardEl.removeEventListener("mousedown", handleMouseDown);
+    document.removeEventListener("mousemove", handleMouseMoveRaf);
     document.removeEventListener("mouseup", handleMouseUp);
     boardEl.removeEventListener("contextmenu", handleContextMenu);
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    rafMouseEvent = null;
     if (svg.parentNode) svg.parentNode.removeChild(svg);
   }
 
-  return { svg, destroy, clearArrows, drawEngineArrows, clearEngineArrows };
+  function cancelDrag() {
+    dragStart = null;
+    if (tempPath && tempPath.parentNode) tempPath.remove();
+    tempPath = null;
+  }
+
+  return {
+    svg,
+    destroy,
+    cancelDrag,
+    clearArrows,
+    drawEngineArrows,
+    clearEngineArrows,
+    refreshGeometry,
+  };
 
   function drawEngineArrows(moves) {
     clearEngineArrows();
     if (!moves || moves.length === 0) return;
-
-    const cells = boardEl.querySelectorAll("[data-row]");
-    const cellMap = {};
-    cells.forEach(c => {
-      cellMap[`${c.dataset.row}-${c.dataset.col}`] = c;
-    });
+    refreshGeometry();
 
     const colors = ["#6BBF59", "#3B82F6"];
     const opacities = [0.85, 0.6];
@@ -314,12 +331,9 @@ export function createArrowOverlay(boardEl, getPiece) {
       const toCol = m.move.charCodeAt(2) - 97;
       const toRow = 8 - parseInt(m.move[3], 10);
 
-      const fromCell = cellMap[`${fromRow}-${fromCol}`];
-      const toCell = cellMap[`${toRow}-${toCol}`];
-      if (!fromCell || !toCell) return;
-
-      const from = cellCenter(fromCell);
-      const to = cellCenter(toCell);
+      const from = getCachedCenter(fromRow, fromCol);
+      const to = getCachedCenter(toRow, toCol);
+      if (!from || !to) return;
 
       const dr = toRow - fromRow;
       const dc = toCol - fromCol;
@@ -330,11 +344,11 @@ export function createArrowOverlay(boardEl, getPiece) {
 
       const arrow = createArrowEl(from.x, from.y, to.x, to.y, corner, colors[i], opacities[i]);
       arrow.classList.add("engine-arrow");
-      svg.appendChild(arrow);
+      engineLayer.appendChild(arrow);
     });
   }
 
   function clearEngineArrows() {
-    svg.querySelectorAll(".engine-arrow").forEach(el => el.remove());
+    while (engineLayer.firstChild) engineLayer.removeChild(engineLayer.firstChild);
   }
 }

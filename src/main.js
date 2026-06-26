@@ -8,7 +8,7 @@ import { getPlayerElo, setPlayerElo, calculateNewElo, updatePlayerStats } from "
 import { StockfishEngine } from "./game/engine/StockfishEngine.js";
 import { WHITE, BLACK } from "./game/chess.js";
 import { TIME_CONTROLS, BOT_LEVELS } from "./config/gameModes.js";
-import { isLoggedIn, getCurrentUser, logout, login, register, initSession } from "./auth/Auth.js";
+import { isLoggedIn, getCurrentUser, logout, login, register, initSession, checkAndRecoverAuth } from "./auth/Auth.js";
 import { createMatchmaking, getGameData, deleteGame } from "./firebase/Matchmaking.js";
 import { createWebRTC } from "./firebase/WebRTC.js";
 
@@ -361,6 +361,12 @@ function buildGameScreen() {
     const playerArrowsBtn = actionsBar.querySelector("#toggle-player-arrows");
     const enemyArrowsBtn = actionsBar.querySelector("#toggle-enemy-arrows");
 
+    if (enemyArrowsBtn) {
+      enemyArrowsBtn.disabled = true;
+      enemyArrowsBtn.classList.remove("active");
+      enemyArrowsBtn.title = "Coach mode shows arrows only on your turn";
+    }
+
     if (playerArrowsBtn) {
       playerArrowsBtn.addEventListener("click", () => {
         playerArrowsBtn.classList.toggle("active");
@@ -432,12 +438,26 @@ function startGameWebRTC(gameId, mySide, isOfferer) {
   });
 
   currentRtc.onMove = (msg) => {
+    if (!msg || typeof msg.from !== "string" || typeof msg.to !== "string") {
+      console.warn("[WebRTC] Ignored malformed move payload", msg);
+      return;
+    }
+    if (!/^[a-h][1-8]$/i.test(msg.from) || !/^[a-h][1-8]$/i.test(msg.to)) {
+      console.warn("[WebRTC] Ignored invalid UCI square in move", msg);
+      return;
+    }
+
     if (currentBoard && currentBoard.applyMove) {
-      const fr = 8 - parseInt(msg.from[1], 10);
-      const fc = msg.from.charCodeAt(0) - 97;
-      const tr = 8 - parseInt(msg.to[1], 10);
-      const tc = msg.to.charCodeAt(0) - 97;
-      currentBoard.applyMove(fr, fc, tr, tc);
+      const from = msg.from.toLowerCase();
+      const to = msg.to.toLowerCase();
+      const fr = 8 - parseInt(from[1], 10);
+      const fc = from.charCodeAt(0) - 97;
+      const tr = 8 - parseInt(to[1], 10);
+      const tc = to.charCodeAt(0) - 97;
+      const ok = currentBoard.applyMove(fr, fc, tr, tc);
+      if (ok === false) {
+        console.warn("[WebRTC] Move was ignored by board validation", msg);
+      }
     }
   };
 
@@ -634,6 +654,25 @@ function showResignConfirm(onConfirm) {
 el.className = "app";
 
 (async () => {
+  // Check Firebase auth state and recover from stale / corrupted tokens
+  // before rendering any screen.  This prevents the "login page won't load
+  // after long background" issue without requiring the user to clear all
+  // browser data.
+  let authResult;
+  try {
+    authResult = await checkAndRecoverAuth();
+  } catch (e) {
+    console.error("[main] checkAndRecoverAuth threw unexpectedly:", e);
+    authResult = { ok: false, recovered: true };
+  }
+
+  if (!authResult.ok && authResult.recovered) {
+    // Storage was cleared; go straight to login.
+    showAuth();
+    initEngine();
+    return;
+  }
+
   if (isLoggedIn()) {
     const result = await initSession();
     if (result && !result.ok) {

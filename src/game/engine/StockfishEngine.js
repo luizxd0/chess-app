@@ -6,6 +6,12 @@ export class StockfishEngine {
     this._pendingEval = null;
     this._lastEval = null;
     this._fen = null;
+    this._multiPVHandler = null;
+    this._multiPVStopTimer = null;
+    this._multiPVActive = false;
+    // Counts how many stop-generated bestmove responses are still in-flight
+    // and should be discarded before processing a real search result.
+    this._multiPVPendingStops = 0;
   }
 
   async init() {
@@ -93,16 +99,56 @@ export class StockfishEngine {
     });
   }
 
-  goMultiPV(fen, depth, count) {
+  /**
+   * Run a multi-PV analysis on the given FEN.
+   * @param {string} fen
+   * @param {number} depth
+   * @param {number} count  Number of top moves to return.
+   * @param {function|null} onInfo  Called with current best moves on every PV
+   *   update so the UI can draw provisional arrows immediately without waiting
+   *   for the full search to finish.
+   * @param {number} [maxMs]  Hard time cap in ms (default: 800).  The engine
+   *   is stopped after this many ms so the UI never waits more than maxMs for
+   *   the final arrows.
+   */
+  goMultiPV(fen, depth, count, onInfo, maxMs) {
     if (!this.available || !this.worker) return Promise.resolve([]);
+
+    // Cancel any in-flight multiPV search before starting a new one so stale
+    // stop timers and orphaned message handlers cannot interfere.
+    if (this._multiPVHandler) {
+      this.worker.removeEventListener("message", this._multiPVHandler);
+      this._multiPVHandler = null;
+    }
+    if (this._multiPVStopTimer !== null) {
+      clearTimeout(this._multiPVStopTimer);
+      this._multiPVStopTimer = null;
+    }
+    if (this._multiPVActive) {
+      // Stopping the engine emits a bestmove response that must be skipped.
+      // Use a counter (not a boolean) so N rapid calls each increment it and
+      // the new handler discards exactly N stale bestmoves before accepting a
+      // real result — no matter how many overlapping calls were made.
+      this.worker.postMessage("stop");
+      this._multiPVPendingStops++;
+      this._multiPVActive = false;
+    }
+
+    const MIN_SEARCH_MS = 300;
+    const DEPTH_MS_FACTOR = 80;
+    const MAX_SEARCH_MS = 800;
+    const timeLimit = maxMs !== undefined
+      ? maxMs
+      : Math.min(Math.max(MIN_SEARCH_MS, depth * DEPTH_MS_FACTOR), MAX_SEARCH_MS);
 
     return new Promise((resolve) => {
       const lines = [];
-      let bestmoveReceived = false;
 
       const handler = (e) => {
         const line = e.data;
         if (line.startsWith("info") && line.includes("multipv")) {
+          // Discard info lines that belong to a search we already cancelled.
+          if (this._multiPVPendingStops > 0) return;
           const pvMatch = line.match(/multipv (\d+)/);
           const pvIndex = pvMatch ? parseInt(pvMatch[1]) - 1 : 0;
           const pvMoveMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
@@ -112,23 +158,47 @@ export class StockfishEngine {
               move: pvMoveMatch[1],
               score: scoreMatch ? { type: scoreMatch[1], value: parseInt(scoreMatch[2]) } : null,
             };
+            // Fire interim callback so the UI can draw a provisional arrow
+            // immediately from the first PV result rather than waiting for
+            // bestmove (which may arrive seconds later at high depths).
+            if (onInfo) {
+              const current = lines.filter(Boolean).slice(0, count);
+              if (current.length > 0) onInfo(current);
+            }
           }
         }
         if (line.startsWith("bestmove")) {
+          if (this._multiPVPendingStops > 0) {
+            // Stale bestmove from a previous cancelled search — discard it.
+            this._multiPVPendingStops--;
+            return;
+          }
           this.worker.removeEventListener("message", handler);
+          if (this._multiPVHandler === handler) this._multiPVHandler = null;
+          if (this._multiPVStopTimer !== null) {
+            clearTimeout(this._multiPVStopTimer);
+            this._multiPVStopTimer = null;
+          }
+          this._multiPVActive = false;
           resolve(lines.filter(Boolean).slice(0, count));
         }
       };
 
+      this._multiPVHandler = handler;
+      this._multiPVActive = true;
       this.worker.addEventListener("message", handler);
+
       this.worker.postMessage("ucinewgame");
       this.worker.postMessage(`setoption name MultiPV value ${count}`);
       this.worker.postMessage(`position fen ${fen}`);
       this.worker.postMessage(`go depth ${depth}`);
 
-      setTimeout(() => {
-        this.worker.postMessage("stop");
-      }, Math.max(500, depth * 200));
+      this._multiPVStopTimer = setTimeout(() => {
+        this._multiPVStopTimer = null;
+        if (this._multiPVActive) {
+          this.worker.postMessage("stop");
+        }
+      }, timeLimit);
     });
   }
 
