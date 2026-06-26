@@ -180,6 +180,19 @@
   justify-content: center;
 }
 
+.coach-depth {
+  min-width: 120px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+  padding: 6px 10px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.12);
+  white-space: nowrap;
+}
+
 .toggle-btn {
   padding: 6px 12px;
   font-size: 12px;

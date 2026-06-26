@@ -57,6 +57,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   let pendingSuggestionPayload = null;
   let renderedSuggestionState = null;
 
+  function reportSuggestionDepth(depth, targetDepth, side = state.turn) {
+    if (!callbacks || typeof callbacks.onSuggestionDepth !== "function") return;
+    callbacks.onSuggestionDepth({ depth, targetDepth, side, playerSide });
+  }
+
   const history = [];
   function pushSnapshot() {
     history.push({
@@ -381,6 +386,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       suggestionRafId = 0;
     }
     arrowOverlay.clearEngineArrows();
+    reportSuggestionDepth(null, null);
   }
 
   function buildSuggestionTicket(fen) {
@@ -431,15 +437,21 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       if (nextMoves.length === 0) {
         renderedSuggestionState = null;
         arrowOverlay.clearEngineArrows();
+        reportSuggestionDepth(null, payload.ticket.targetDepth || null, payload.ticket.turn);
         return;
       }
+
+      const shownDepth = nextMoves.reduce((maxDepth, m) => Math.max(maxDepth, m.depth || 0), 0) || null;
 
       renderedSuggestionState = {
         key: payload.ticket.key,
         signature: nextSig,
         moves: nextMoves,
+        depth: shownDepth,
+        targetDepth: payload.ticket.targetDepth || null,
       };
       arrowOverlay.drawEngineArrows(nextMoves);
+      reportSuggestionDepth(shownDepth, payload.ticket.targetDepth || null, payload.ticket.turn);
     });
   }
 
@@ -450,6 +462,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!shouldShowSuggestionsForCurrentTurn()) {
       renderedSuggestionState = null;
       arrowOverlay.clearEngineArrows();
+      reportSuggestionDepth(null, null);
       return;
     }
 
@@ -457,6 +470,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const suggestionKey = JSON.stringify([state.turn, fen]);
     if (!force && lastSuggestionKey === suggestionKey && renderedSuggestionState && renderedSuggestionState.key === suggestionKey) {
       arrowOverlay.drawEngineArrows(renderedSuggestionState.moves);
+      reportSuggestionDepth(renderedSuggestionState.depth || null, renderedSuggestionState.targetDepth || null, state.turn);
       return;
     }
 
@@ -468,13 +482,15 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
     pendingSuggestionPayload = null;
 
-    const ticket = buildSuggestionTicket(fen);
-    activeSuggestionTicket = ticket;
-
     // Cap suggestion depth to 8 so the search stays fast regardless of the
     // bot's play depth (expert uses depth 22).  Depth 8 gives good coaching
     // arrows in well under a second even on dense positions.
     const suggestDepth = Math.min((config.engine.depth || 10), 8);
+
+    const ticket = buildSuggestionTicket(fen);
+    ticket.targetDepth = suggestDepth;
+    activeSuggestionTicket = ticket;
+    reportSuggestionDepth(0, suggestDepth, ticket.turn);
 
     // Draw provisional arrows as soon as the first PV result arrives so the
     // user never stares at an empty board while the deeper search finishes.
@@ -488,6 +504,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       if (!isSuggestionTicketValid(ticket)) return;
       renderedSuggestionState = null;
       arrowOverlay.clearEngineArrows();
+      reportSuggestionDepth(null, suggestDepth, ticket.turn);
     });
   }
 
@@ -653,7 +670,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!piece || getPieceColor(piece) !== state.turn) return;
     if (state.turn !== playerSide) return;
 
-    e.preventDefault();
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
     const cellRect = cell.getBoundingClientRect();
 

@@ -153,10 +153,13 @@ export class StockfishEngine {
           const pvIndex = pvMatch ? parseInt(pvMatch[1]) - 1 : 0;
           const pvMoveMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
           const scoreMatch = line.match(/score (cp|mate) (-?\d+)/);
+          const depthMatch = line.match(/ depth (\d+)/);
+          const depthValue = depthMatch ? parseInt(depthMatch[1]) : null;
           if (pvMoveMatch) {
             lines[pvIndex] = {
               move: pvMoveMatch[1],
               score: scoreMatch ? { type: scoreMatch[1], value: parseInt(scoreMatch[2]) } : null,
+              depth: depthValue,
             };
             // Fire interim callback so the UI can draw a provisional arrow
             // immediately from the first PV result rather than waiting for

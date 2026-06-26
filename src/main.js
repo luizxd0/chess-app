@@ -327,6 +327,7 @@ function buildGameScreen() {
         <button class="toggle-btn active" id="toggle-player-arrows" title="Show your best moves">Your Arrows</button>
         <button class="toggle-btn" id="toggle-enemy-arrows" title="Show opponent's best moves">Enemy Arrows</button>
       </div>
+      <div class="coach-depth" id="coach-depth" title="Current search depth for displayed arrow">Depth: --</div>
       <button class="action-btn menu-btn" id="game-back">← Menu</button>
     `;
   } else {
@@ -360,6 +361,18 @@ function buildGameScreen() {
   if (config.gameType === "coach_bot") {
     const playerArrowsBtn = actionsBar.querySelector("#toggle-player-arrows");
     const enemyArrowsBtn = actionsBar.querySelector("#toggle-enemy-arrows");
+    const depthBadge = actionsBar.querySelector("#coach-depth");
+
+    gameScreen.updateCoachDepth = (info) => {
+      if (!depthBadge) return;
+      if (!info || info.depth === null || info.targetDepth === null) {
+        depthBadge.textContent = "Depth: --";
+        return;
+      }
+      const isPlayer = info.side === info.playerSide;
+      const sideText = isPlayer ? "You" : "Enemy";
+      depthBadge.textContent = `Depth: ${info.depth}/${info.targetDepth} (${sideText})`;
+    };
 
     if (playerArrowsBtn) {
       playerArrowsBtn.addEventListener("click", () => {
@@ -428,6 +441,9 @@ function startGameWebRTC(gameId, mySide, isOfferer) {
           showGameOverModal(result, null, null, false);
         }, 2000);
       }
+    },
+    onSuggestionDepth: (info) => {
+      if (boardCard.updateCoachDepth) boardCard.updateCoachDepth(info);
     },
   });
 
@@ -559,6 +575,9 @@ function startGame() {
           showGameOverModal(result, null, null, false);
         }, 2000);
       }
+    },
+    onSuggestionDepth: (info) => {
+      if (boardCard.updateCoachDepth) boardCard.updateCoachDepth(info);
     },
   });
 }
