@@ -361,12 +361,6 @@ function buildGameScreen() {
     const playerArrowsBtn = actionsBar.querySelector("#toggle-player-arrows");
     const enemyArrowsBtn = actionsBar.querySelector("#toggle-enemy-arrows");
 
-    if (enemyArrowsBtn) {
-      enemyArrowsBtn.disabled = true;
-      enemyArrowsBtn.classList.remove("active");
-      enemyArrowsBtn.title = "Coach mode shows arrows only on your turn";
-    }
-
     if (playerArrowsBtn) {
       playerArrowsBtn.addEventListener("click", () => {
         playerArrowsBtn.classList.toggle("active");

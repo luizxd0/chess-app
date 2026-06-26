@@ -50,12 +50,12 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   let replay = null;
   let inReplay = false;
   let liveState = null;
-  let suggestionRequestId = 0;
+  let suggestionEpoch = 0;
   let lastSuggestionKey = null;
-  let activeSuggestionContext = null;
+  let activeSuggestionTicket = null;
   let suggestionRafId = 0;
-  let pendingSuggestionMoves = null;
-  let renderedSuggestionSignature = null;
+  let pendingSuggestionPayload = null;
+  let renderedSuggestionState = null;
 
   const history = [];
   function pushSnapshot() {
@@ -248,6 +248,23 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     topCaptured.render(topPieces, topVal - bottomVal);
     bottomCaptured.render(bottomPieces, bottomVal - topVal);
     arrowOverlay.refreshGeometry();
+
+    // Keep engine arrows anchored after any board rerender/resize.
+    if (!renderedSuggestionState) {
+      return;
+    }
+
+    const fenNow = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
+    const keyNow = JSON.stringify([state.turn, fenNow]);
+    if (!shouldShowSuggestionsForCurrentTurn() || renderedSuggestionState.key !== keyNow) {
+      renderedSuggestionState = null;
+      arrowOverlay.clearEngineArrows();
+      return;
+    }
+
+    if (renderedSuggestionState.moves.length > 0) {
+      arrowOverlay.drawEngineArrows(renderedSuggestionState.moves);
+    }
   }
 
   function endGame(winner, result) {
@@ -350,15 +367,15 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   }
 
   function shouldShowSuggestionsForCurrentTurn() {
-    return state.turn === playerSide && state.showPlayerArrows;
+    return state.turn === playerSide ? state.showPlayerArrows : state.showEnemyArrows;
   }
 
   function clearSuggestionArrows() {
-    suggestionRequestId += 1;
+    suggestionEpoch += 1;
     lastSuggestionKey = null;
-    activeSuggestionContext = null;
-    pendingSuggestionMoves = null;
-    renderedSuggestionSignature = null;
+    activeSuggestionTicket = null;
+    pendingSuggestionPayload = null;
+    renderedSuggestionState = null;
     if (suggestionRafId) {
       cancelAnimationFrame(suggestionRafId);
       suggestionRafId = 0;
@@ -366,74 +383,93 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     arrowOverlay.clearEngineArrows();
   }
 
-  function buildSuggestionContext(requestId, fen) {
+  function buildSuggestionTicket(fen) {
+    const key = JSON.stringify([state.turn, fen]);
     return {
-      requestId,
+      epoch: suggestionEpoch,
+      key,
       fen,
       turn: state.turn,
-      playerSide,
-      replayState: inReplay,
-      visible: state.showPlayerArrows,
     };
   }
 
-  function isSuggestionContextValid(ctx) {
-    if (!ctx) return false;
-    if (ctx !== activeSuggestionContext) return false;
-    if (ctx.requestId !== suggestionRequestId) return false;
+  function isSuggestionTicketValid(ticket) {
+    if (!ticket) return false;
+    if (ticket !== activeSuggestionTicket) return false;
+    if (ticket.epoch !== suggestionEpoch) return false;
     if (gameEnded || state.gameOver || inReplay) return false;
-    if (ctx.replayState !== inReplay) return false;
-    if (!state.showPlayerArrows || !ctx.visible) return false;
-    if (state.turn !== ctx.turn) return false;
-    if (ctx.turn !== playerSide || ctx.playerSide !== playerSide) return false;
+    if (!shouldShowSuggestionsForCurrentTurn()) return false;
+    if (state.turn !== ticket.turn) return false;
 
     const fenNow = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-    return fenNow === ctx.fen;
+    return fenNow === ticket.fen;
   }
 
   function normalizeSuggestionMoves(moves) {
     return (moves || []).filter((m) => m && m.move && m.move.length >= 4).slice(0, 1);
   }
 
-  function queueSuggestionRender(ctx, moves) {
-    if (!isSuggestionContextValid(ctx)) return;
-    pendingSuggestionMoves = normalizeSuggestionMoves(moves);
+  function queueSuggestionRender(ticket, moves) {
+    if (!isSuggestionTicketValid(ticket)) return;
+    pendingSuggestionPayload = {
+      ticket,
+      moves: normalizeSuggestionMoves(moves),
+    };
     if (suggestionRafId) return;
 
     suggestionRafId = requestAnimationFrame(() => {
       suggestionRafId = 0;
-      if (!isSuggestionContextValid(ctx)) return;
+      const payload = pendingSuggestionPayload;
+      pendingSuggestionPayload = null;
+      if (!payload) return;
+      if (!isSuggestionTicketValid(payload.ticket)) return;
 
-      const nextMoves = pendingSuggestionMoves || [];
-      const nextSig = JSON.stringify([ctx.requestId, nextMoves.map((m) => m.move)]);
-      if (nextSig === renderedSuggestionSignature) return;
-      renderedSuggestionSignature = nextSig;
+      const nextMoves = payload.moves || [];
+      const nextSig = JSON.stringify([payload.ticket.key, nextMoves.map((m) => m.move)]);
+      if (renderedSuggestionState && renderedSuggestionState.signature === nextSig) return;
 
       if (nextMoves.length === 0) {
+        renderedSuggestionState = null;
         arrowOverlay.clearEngineArrows();
         return;
       }
 
+      renderedSuggestionState = {
+        key: payload.ticket.key,
+        signature: nextSig,
+        moves: nextMoves,
+      };
       arrowOverlay.drawEngineArrows(nextMoves);
     });
   }
 
-  function requestEngineSuggestions() {
+  function requestEngineSuggestions(force = false) {
     if (config.gameType !== "coach_bot") return;
     if (!engine || !engine.available) return;
     if (state.gameOver || gameEnded || inReplay) return;
     if (!shouldShowSuggestionsForCurrentTurn()) {
-      clearSuggestionArrows();
+      renderedSuggestionState = null;
+      arrowOverlay.clearEngineArrows();
       return;
     }
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
     const suggestionKey = JSON.stringify([state.turn, fen]);
-    if (lastSuggestionKey === suggestionKey) return;
+    if (!force && lastSuggestionKey === suggestionKey && renderedSuggestionState && renderedSuggestionState.key === suggestionKey) {
+      arrowOverlay.drawEngineArrows(renderedSuggestionState.moves);
+      return;
+    }
+
     lastSuggestionKey = suggestionKey;
-    const requestId = ++suggestionRequestId;
-    const ctx = buildSuggestionContext(requestId, fen);
-    activeSuggestionContext = ctx;
+    suggestionEpoch += 1;
+    if (suggestionRafId) {
+      cancelAnimationFrame(suggestionRafId);
+      suggestionRafId = 0;
+    }
+    pendingSuggestionPayload = null;
+
+    const ticket = buildSuggestionTicket(fen);
+    activeSuggestionTicket = ticket;
 
     // Cap suggestion depth to 8 so the search stays fast regardless of the
     // bot's play depth (expert uses depth 22).  Depth 8 gives good coaching
@@ -443,16 +479,15 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     // Draw provisional arrows as soon as the first PV result arrives so the
     // user never stares at an empty board while the deeper search finishes.
     const onInfo = (moves) => {
-      queueSuggestionRender(ctx, moves);
+      queueSuggestionRender(ticket, moves);
     };
 
     engine.goMultiPV(fen, suggestDepth, 1, onInfo, 600).then((moves) => {
-      if (!isSuggestionContextValid(ctx)) return;
-      if (!shouldShowSuggestionsForCurrentTurn()) {
-        arrowOverlay.clearEngineArrows();
-        return;
-      }
-      queueSuggestionRender(ctx, moves);
+      queueSuggestionRender(ticket, moves);
+    }).catch(() => {
+      if (!isSuggestionTicketValid(ticket)) return;
+      renderedSuggestionState = null;
+      arrowOverlay.clearEngineArrows();
     });
   }
 
@@ -616,7 +651,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const col = parseInt(cell.dataset.col);
     const piece = state.pieces[`${row}-${col}`];
     if (!piece || getPieceColor(piece) !== state.turn) return;
-    if (state.turn !== playerSide && config.engine.enabled) return;
+    if (state.turn !== playerSide) return;
 
     e.preventDefault();
     const legalMoves = getLegalMoves(state.pieces, row, col, state.castlingRights, state.enPassantTarget);
@@ -692,7 +727,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     if (drag.clone) drag.clone.remove();
 
-    if (!drag.dragging) return;   // never exceeded threshold → let click handler run
+    // Never exceeded drag threshold: keep click-to-move enabled.
+    if (!drag.dragging) {
+      handledByDrag = false;
+      return;
+    }
 
     handledByDrag = true;
     state.selected = null;
@@ -732,7 +771,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     const piece = state.pieces[`${row}-${col}`];
     if (piece && getPieceColor(piece) === state.turn) {
-      if (state.turn !== playerSide && config.engine.enabled) return;
+      if (state.turn !== playerSide) return;
       if (state.selected && state.selected.row === row && state.selected.col === col) {
         state.selected = null;
         state.legalMoves = [];
@@ -855,17 +894,13 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     },
     togglePlayerArrows(show) {
       state.showPlayerArrows = show;
-      if (!show) {
-        clearSuggestionArrows();
-      } else if (state.turn === playerSide) {
-        requestEngineSuggestions();
-      }
+      lastSuggestionKey = null;
+      requestEngineSuggestions(true);
     },
     toggleEnemyArrows(show) {
       state.showEnemyArrows = show;
-      if (!show && state.turn !== playerSide) {
-        clearSuggestionArrows();
-      }
+      lastSuggestionKey = null;
+      requestEngineSuggestions(true);
     },
   };
 }
