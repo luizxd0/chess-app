@@ -344,18 +344,18 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
             { transform: "translate(0, 0) scale(1.04)" },
             { transform: `translate(${cloneDx}px, ${cloneDy}px) scale(1)` },
           ],
-          { duration: 380, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" }
+          { duration: 560, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" }
         );
         animation.finished.then(cleanup, cleanup);
       } else {
         clone.style.transform = "translate(0, 0) scale(1.04)";
         requestAnimationFrame(() => {
-          clone.style.transition = "transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+          clone.style.transition = "transform 560ms cubic-bezier(0.2, 0.8, 0.2, 1)";
           clone.style.transform = `translate(${cloneDx}px, ${cloneDy}px) scale(1)`;
           clone.addEventListener("transitionend", cleanup, { once: true });
         });
       }
-      setTimeout(cleanup, 480);
+      setTimeout(cleanup, 700);
     });
   }
 
