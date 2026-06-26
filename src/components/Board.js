@@ -523,8 +523,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
     const key = JSON.stringify([state.turn, fen]);
     const timeLeft = clock[state.turn];
-    const thinkTime = Math.min(timeLeft / 30, 2000);
-    const searchTimeMs = Math.max(100, thinkTime);
+    const searchTimeMs = getBotSearchTimeMs(timeLeft);
 
     const cachedCoachMove = (
       config.gameType === "coach_bot" &&
@@ -595,8 +594,17 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   function calcThinkDelay() {
     const d = config.engine.depth || 10;
-    const base = Math.max(400, 3500 - d * 120);
-    return base + Math.random() * 800;
+    if (d >= 20) return 250 + Math.random() * 350;
+    if (d >= 14) return 350 + Math.random() * 500;
+    const base = Math.max(500, 2600 - d * 120);
+    return base + Math.random() * 600;
+  }
+
+  function getBotSearchTimeMs(timeLeft) {
+    const d = config.engine.depth || 10;
+    const levelCap = d >= 20 ? 1200 : d >= 14 ? 1000 : d >= 8 ? 800 : 500;
+    const clockCap = Math.max(250, timeLeft / 40);
+    return Math.round(Math.max(250, Math.min(levelCap, clockCap)));
   }
 
   function executeMove(fromRow, fromCol, toRow, toCol) {
