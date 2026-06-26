@@ -7,7 +7,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at top, #2f3b52, #111827);
+  background:
+    radial-gradient(circle at 50% -10%, rgba(59, 130, 246, 0.22), transparent 28rem),
+    radial-gradient(circle at top, #2f3b52, #111827);
 }
 
 .auth-modal {
@@ -143,8 +145,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 18px 22px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.24);
   flex-shrink: 0;
 }
 
@@ -201,10 +204,10 @@
 
 .home-content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 22px;
 }
 
 .home-section-label {
@@ -222,13 +225,15 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
+  padding: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
   color: #cbd5e1;
   cursor: pointer;
-  transition: all 0.2s ease;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .mode-card:hover {
@@ -281,6 +286,7 @@
 
 .mode-card-desc {
   font-size: 12px;
+  line-height: 1.4;
   color: #64748b;
 }
 
@@ -304,8 +310,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.24);
   flex-shrink: 0;
 }
 
@@ -338,14 +345,14 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px;
+  gap: 24px;
+  padding: 22px;
 }
 
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .settings-label {
@@ -359,19 +366,20 @@
 /* Time control category tabs */
 .tc-categories {
   display: flex;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
-  padding: 3px;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  padding: 4px;
 }
 
 .tc-cat {
   flex: 1;
-  padding: 8px 4px;
+  min-width: 0;
+  padding: 9px 6px;
   font-size: 12px;
   font-weight: 600;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: #64748b;
   cursor: pointer;
@@ -391,17 +399,17 @@
 .tc-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .tc-btn {
-  flex: 1;
-  min-width: 60px;
-  padding: 10px 6px;
+  flex: 1 1 calc(33.333% - 8px);
+  min-width: 82px;
+  padding: 11px 8px;
   font-size: 14px;
   font-weight: 700;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   color: #cbd5e1;
   cursor: pointer;
@@ -429,29 +437,32 @@
   display: block;
   font-size: 10px;
   font-weight: 600;
+  line-height: 1.35;
   opacity: 0.7;
 }
 
 /* Option groups (side, bot level) */
 .option-group {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
 }
 
 .option-btn {
-  flex: 1;
-  min-width: 70px;
-  padding: 10px 8px;
+  min-width: 0;
+  padding: 11px 10px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.25;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   color: #cbd5e1;
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .option-btn:hover {
@@ -464,9 +475,30 @@
   color: #fff;
 }
 
+.settings-note {
+  padding: 13px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.settings-note strong {
+  color: #e2e8f0;
+}
+
+.settings-note-sub {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+}
+
 /* Play button */
 .settings-play {
-  margin-top: auto;
+  margin-top: 4px;
   padding: 14px;
   font-size: 17px;
   font-weight: 700;

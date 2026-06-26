@@ -176,8 +176,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     const vw = window.innerWidth || 360;
     const boardRect = boardWrapper.getBoundingClientRect();
-    let availW = boardRect.width - 16;
-    let availH = boardRect.height - 8;
+    let availW = boardRect.width - 8;
+    let availH = boardRect.height - 4;
     if (availW < 100 || availH < 100) {
       availW = vw - 16;
       const vh = window.innerHeight || 600;
