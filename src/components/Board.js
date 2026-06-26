@@ -335,7 +335,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
       const cloneDx = finalRect.left - pieceLeft;
       const cloneDy = finalRect.top - pieceTop;
-      const duration = 900;
+      const duration = 240;
       const startedAt = performance.now();
       const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
@@ -343,7 +343,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         if (cleaned) return;
         const progress = Math.min(1, (now - startedAt) / duration);
         const eased = easeOut(progress);
-        const scale = 1.12 - 0.12 * eased;
+        const scale = 1.06 - 0.06 * eased;
         clone.style.transform = `translate(${cloneDx * eased}px, ${cloneDy * eased}px) scale(${scale})`;
         if (progress < 1) {
           requestAnimationFrame(step);
@@ -352,9 +352,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         }
       };
 
-      clone.style.transform = "translate(0, 0) scale(1.12)";
+      clone.style.transform = "translate(0, 0) scale(1.06)";
       requestAnimationFrame(step);
-      setTimeout(cleanup, duration + 200);
+      setTimeout(cleanup, duration + 120);
     });
   }
 
