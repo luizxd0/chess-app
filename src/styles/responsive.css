@@ -1,17 +1,45 @@
-/* Desktop: center the app in a phone-shaped container */
+/* Desktop: center the app in a wider chess-focused container */
 @media (min-width: 601px) {
   .app {
     align-items: center;
-    background: #0f172a;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.16), transparent 34rem),
+      #0f172a;
   }
 
   .app-inner {
-    max-width: 420px;
+    max-width: 500px;
     width: 100%;
     height: 100%;
     border-left: 1px solid rgba(255, 255, 255, 0.06);
     border-right: 1px solid rgba(255, 255, 255, 0.06);
     background: radial-gradient(circle at top, #2f3b52, #111827);
+    box-shadow: 0 0 48px rgba(0, 0, 0, 0.28);
+  }
+
+  .player-bar {
+    padding: 6px 12px;
+  }
+
+  .game-actions-bar {
+    padding: 8px 14px;
+  }
+
+  .action-btn {
+    max-width: none;
+    min-width: 96px;
+  }
+}
+
+@media (min-width: 900px) {
+  .app-inner {
+    max-width: 580px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .app-inner {
+    max-width: 640px;
   }
 }
 
@@ -57,11 +85,12 @@
   }
 
   .home-content {
-    padding: 16px;
+    padding: 14px;
   }
 
   .mode-card {
     padding: 14px;
+    gap: 12px;
   }
 
   .mode-card-icon {
@@ -75,8 +104,34 @@
   }
 
   .settings-content {
-    padding: 16px;
+    padding: 14px;
     gap: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .tc-categories {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tc-cat {
+    min-height: 42px;
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+
+  .tc-btn {
+    min-height: 46px;
+    flex-basis: calc(50% - 5px);
+  }
+
+  .option-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .option-btn {
+    min-height: 46px;
+    padding: 10px 8px;
   }
 
   /* Keep the in-game action bar (resign / arrow toggles / depth / menu) from

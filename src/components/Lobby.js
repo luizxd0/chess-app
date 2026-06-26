@@ -122,21 +122,21 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
             <div class="settings-label">Bot Level</div>
             <div class="option-group" id="bot-group"></div>
           </div>
-          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:11px;color:#64748b;">Engine shows best moves with arrows</div>
+          <div class="settings-note">
+            <div>Engine shows best moves with arrows</div>
           </div>
         ` : ""}
 
         ${isRankedBot ? `
-          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:13px;color:#94a3b8;">Bot rated <strong style="color:#e2e8f0;">${Math.max(500, userInfo.elo - 25)}–${userInfo.elo + 25}</strong></div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">Rating changes on result</div>
+          <div class="settings-note">
+            <div>Bot rated <strong>${Math.max(500, userInfo.elo - 25)}–${userInfo.elo + 25}</strong></div>
+            <div class="settings-note-sub">Rating changes on result</div>
           </div>
         ` : ""}
 
         ${isOnline ? `
-          <div style="background:rgba(255,255,255,0.04);border-radius:10px;padding:12px;text-align:center;">
-            <div style="font-size:13px;color:#94a3b8;">Side and rating are random</div>
+          <div class="settings-note">
+            <div>Side and rating are random</div>
           </div>
         ` : ""}
 

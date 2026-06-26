@@ -50,6 +50,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   let replay = null;
   let inReplay = false;
   let liveState = null;
+  let pendingMoveAnimations = [];
   // ── Suggestion-arrow state (simple token pattern) ──────────────────────
   let suggToken = null;      // opaque object; replaced on every new search
   let lastSuggFen = null;    // fen+turn key of the last completed search
@@ -175,8 +176,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
     const vw = window.innerWidth || 360;
     const boardRect = boardWrapper.getBoundingClientRect();
-    let availW = boardRect.width - 16;
-    let availH = boardRect.height - 8;
+    let availW = boardRect.width - 8;
+    let availH = boardRect.height - 4;
     if (availW < 100 || availH < 100) {
       availW = vw - 16;
       const vh = window.innerHeight || 600;
@@ -267,6 +268,94 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         arrowOverlay.clearEngineArrows();
       }
     }
+
+    playPendingMoveAnimations();
+  }
+
+  function queueMoveAnimation(fromRow, fromCol, toRow, toCol, animate) {
+    const sameSquare = fromRow === toRow && fromCol === toCol;
+    const fromCell = board.querySelector(`.cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
+    const toCell = board.querySelector(`.cell[data-row="${toRow}"][data-col="${toCol}"]`);
+    const movingPiece = fromCell?.querySelector(".piece");
+    const fromRect = fromCell?.getBoundingClientRect();
+    const toRect = toCell?.getBoundingClientRect();
+    const pieceRect = movingPiece?.getBoundingClientRect();
+    const dx = fromRect && toRect
+      ? fromRect.left + fromRect.width / 2 - (toRect.left + toRect.width / 2)
+      : null;
+    const dy = fromRect && toRect
+      ? fromRect.top + fromRect.height / 2 - (toRect.top + toRect.height / 2)
+      : null;
+    if (!animate || sameSquare || !fromCell || !toCell || !movingPiece || !pieceRect) return;
+    if (dx === null || dy === null || Math.abs(dx) + Math.abs(dy) < 1) return;
+
+    pendingMoveAnimations.push({
+      row: toRow,
+      col: toCol,
+      pieceClassName: movingPiece.className,
+      pieceHtml: movingPiece.innerHTML,
+      pieceText: movingPiece.textContent,
+      pieceLeft: pieceRect.left,
+      pieceTop: pieceRect.top,
+      pieceWidth: pieceRect.width,
+      pieceHeight: pieceRect.height,
+    });
+  }
+
+  function playPendingMoveAnimations() {
+    if (pendingMoveAnimations.length === 0) return;
+    const animations = pendingMoveAnimations;
+    pendingMoveAnimations = [];
+
+    animations.forEach(({ row, col, pieceClassName, pieceHtml, pieceText, pieceLeft, pieceTop, pieceWidth, pieceHeight }) => {
+      const cell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+      const pieceEl = cell?.querySelector(".piece");
+      if (!pieceEl) return;
+
+      const finalRect = pieceEl.getBoundingClientRect();
+      const clone = document.createElement("span");
+      clone.className = `${pieceClassName || pieceEl.className} move-animation-clone`;
+      if (pieceHtml) clone.innerHTML = pieceHtml;
+      else clone.textContent = pieceText || pieceEl.textContent;
+      clone.style.left = `${pieceLeft}px`;
+      clone.style.top = `${pieceTop}px`;
+      clone.style.width = `${pieceWidth}px`;
+      clone.style.height = `${pieceHeight}px`;
+      document.body.appendChild(clone);
+
+      const originalVisibility = pieceEl.style.visibility;
+      pieceEl.style.visibility = "hidden";
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        clone.remove();
+        pieceEl.style.visibility = originalVisibility;
+      };
+
+      const cloneDx = finalRect.left - pieceLeft;
+      const cloneDy = finalRect.top - pieceTop;
+      const duration = 900;
+      const startedAt = performance.now();
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+      const step = (now) => {
+        if (cleaned) return;
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = easeOut(progress);
+        const scale = 1.12 - 0.12 * eased;
+        clone.style.transform = `translate(${cloneDx * eased}px, ${cloneDy * eased}px) scale(${scale})`;
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          cleanup();
+        }
+      };
+
+      clone.style.transform = "translate(0, 0) scale(1.12)";
+      requestAnimationFrame(step);
+      setTimeout(cleanup, duration + 200);
+    });
   }
 
   function endGame(winner, result) {
@@ -623,8 +712,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     return Math.round(Math.max(250, Math.min(levelCap, clockCap)));
   }
 
-  function executeMove(fromRow, fromCol, toRow, toCol) {
+  function executeMove(fromRow, fromCol, toRow, toCol, options = {}) {
     if (gameEnded) return;
+    const shouldAnimate = options.animate !== false;
 
     const movedPiece = state.pieces[`${fromRow}-${fromCol}`];
     if (!movedPiece) return false;
@@ -638,6 +728,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       state.enPassantTarget
     );
     if (!legalMoves.some(([r, c]) => r === toRow && c === toCol)) return false;
+
+    queueMoveAnimation(fromRow, fromCol, toRow, toCol, shouldAnimate);
 
     let captured = state.pieces[`${toRow}-${toCol}`];
     if (!captured && movedPiece && movedPiece.type === "pawn" && fromCol !== toCol) {
@@ -666,9 +758,9 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     return true;
   }
 
-  function doMove(fromRow, fromCol, toRow, toCol) {
+  function doMove(fromRow, fromCol, toRow, toCol, options = {}) {
     if (gameEnded || state.engineThinking) return;
-    const ok = executeMove(fromRow, fromCol, toRow, toCol);
+    const ok = executeMove(fromRow, fromCol, toRow, toCol, options);
     if (!ok) return;
     if (callbacks.onPlayerMove && !gameEnded) {
       callbacks.onPlayerMove(fromRow, fromCol, toRow, toCol);
@@ -788,7 +880,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         const tr = parseInt(targetCell.dataset.row);
         const tc = parseInt(targetCell.dataset.col);
         if (drag.legalMoves.some(([r, c]) => r === tr && c === tc)) {
-          doMove(drag.row, drag.col, tr, tc);
+          doMove(drag.row, drag.col, tr, tc, { animate: false });
           return;   // doMove → executeMove → afterMove → render()
         }
       }
