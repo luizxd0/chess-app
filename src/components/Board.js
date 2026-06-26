@@ -274,7 +274,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   function queueMoveAnimation(fromRow, fromCol, toRow, toCol, animate) {
     const sameSquare = fromRow === toRow && fromCol === toCol;
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
     const fromCell = board.querySelector(`.cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
     const toCell = board.querySelector(`.cell[data-row="${toRow}"][data-col="${toCol}"]`);
     const movingPiece = fromCell?.querySelector(".piece");
@@ -287,7 +286,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const dy = fromRect && toRect
       ? fromRect.top + fromRect.height / 2 - (toRect.top + toRect.height / 2)
       : null;
-    if (!animate || sameSquare || reducedMotion || !fromCell || !toCell || !movingPiece || !pieceRect) return;
+    if (!animate || sameSquare || !fromCell || !toCell || !movingPiece || !pieceRect) return;
     if (dx === null || dy === null || Math.abs(dx) + Math.abs(dy) < 1) return;
 
     pendingMoveAnimations.push({
