@@ -56,9 +56,13 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   let lastSuggMoves = null;  // moves of the last completed search
   let lastSuggDepth = null;  // depth reached in the last completed search
 
+  function getSuggestionDepth() {
+    return Math.max(10, config.engine?.depth || 10);
+  }
+
   function reportSuggestionDepth(depth, side) {
     if (!callbacks || typeof callbacks.onSuggestionDepth !== "function") return;
-    callbacks.onSuggestionDepth({ depth, targetDepth: 10, side, playerSide });
+    callbacks.onSuggestionDepth({ depth, targetDepth: getSuggestionDepth(), side, playerSide });
   }
 
   const history = [];
@@ -359,10 +363,20 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     switchClock(clock);
 
     if (!gameEnded) {
-      // Compute suggestions first (engine still idle) so they can render before
-      // the bot's move search takes over the shared engine worker.
-      requestEngineSuggestions();
-      requestEngineMove();
+      if (config.gameType === "coach_bot") {
+        // Visible enemy suggestions share the same engine worker; wait for the
+        // final arrow before starting the bot search so the bot cannot abort it.
+        const suggestionsDone = requestEngineSuggestions();
+        if (state.turn !== playerSide) {
+          Promise.resolve(suggestionsDone).finally(() => {
+            if (!gameEnded && !state.gameOver && !inReplay && state.turn !== playerSide) {
+              requestEngineMove();
+            }
+          });
+        }
+      } else {
+        requestEngineMove();
+      }
     }
   }
 
@@ -391,19 +405,19 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   }
 
   function requestEngineSuggestions(force = false) {
-    if (config.gameType !== "coach_bot") return;
-    if (!engine || !engine.available) return;
-    if (state.gameOver || gameEnded || inReplay) return;
+    if (config.gameType !== "coach_bot") return Promise.resolve(null);
+    if (!engine || !engine.available) return Promise.resolve(null);
+    if (state.gameOver || gameEnded || inReplay) return Promise.resolve(null);
 
     // The bot move and the suggestion analysis share a single engine worker.
     // Never start a suggestion search while the bot is computing its move, or
     // the two searches corrupt each other. Suggestions are recomputed right
     // after every move, so they will refresh once the engine is free.
-    if (state.engineThinking) return;
+    if (state.engineThinking) return Promise.resolve(null);
 
     if (!shouldShowSuggestionsForCurrentTurn()) {
       clearSuggestionArrows();
-      return;
+      return Promise.resolve(null);
     }
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
@@ -413,7 +427,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     if (!force && key === lastSuggFen && lastSuggMoves) {
       arrowOverlay.drawEngineArrows(lastSuggMoves);
       reportSuggestionDepth(lastSuggDepth, state.turn);
-      return;
+      return Promise.resolve(lastSuggMoves);
     }
 
     // Start a fresh search. Any result arriving for a previous token is ignored.
@@ -424,7 +438,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     lastSuggDepth = null;
     arrowOverlay.clearEngineArrows();
 
-    const suggestDepth = 10;
+    const suggestDepth = getSuggestionDepth();
     const captureTurn = state.turn;   // snapshot so closures can check staleness
     const captureFen  = fen;
     reportSuggestionDepth(0, captureTurn);
@@ -432,19 +446,19 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const commit = (moves) => {
       // `null` means the search was superseded by a newer one — leave the
       // currently-displayed arrows untouched.
-      if (moves === null) return;
+      if (moves === null) return null;
       // Stale if a new search was started, or game/turn state changed.
-      if (tok !== suggToken) return;
-      if (state.turn !== captureTurn) return;
-      if (gameEnded || state.gameOver || inReplay) return;
-      if (!shouldShowSuggestionsForCurrentTurn()) { clearSuggestionArrows(); return; }
+      if (tok !== suggToken) return null;
+      if (state.turn !== captureTurn) return null;
+      if (gameEnded || state.gameOver || inReplay) return null;
+      if (!shouldShowSuggestionsForCurrentTurn()) { clearSuggestionArrows(); return null; }
       const fenNow = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-      if (fenNow !== captureFen) return;
+      if (fenNow !== captureFen) return null;
 
       const normalized = (moves || [])
         .filter((m) => m?.move?.length >= 4 && moveBelongsToSideToMove(m.move))
         .slice(0, 1);
-      if (normalized.length === 0) { arrowOverlay.clearEngineArrows(); return; }
+      if (normalized.length === 0) { arrowOverlay.clearEngineArrows(); return []; }
 
       const depth = normalized.reduce((d, m) => Math.max(d, m.depth || 0), 0) || null;
       lastSuggFen   = key;
@@ -452,11 +466,12 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       lastSuggDepth = depth;
       arrowOverlay.drawEngineArrows(normalized);
       reportSuggestionDepth(depth, captureTurn);
+      return normalized;
     };
 
-    engine.goMultiPV(captureFen, suggestDepth, 1, commit, 1000)
+    return engine.goMultiPV(captureFen, suggestDepth, 1, null, 1000)
       .then(commit)
-      .catch(() => { if (tok === suggToken) arrowOverlay.clearEngineArrows(); });
+      .catch(() => { if (tok === suggToken) arrowOverlay.clearEngineArrows(); return null; });
   }
 
   function getAllMoves() {
@@ -473,7 +488,16 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     return moves;
   }
 
-  function requestEngineMove() {
+  function executeUciMove(move) {
+    if (!move || move.length < 4 || move === "0000") return false;
+    const fr = 8 - parseInt(move[1], 10);
+    const fc = move.charCodeAt(0) - 97;
+    const tr = 8 - parseInt(move[3], 10);
+    const tc = move.charCodeAt(2) - 97;
+    return executeMove(fr, fc, tr, tc);
+  }
+
+  function requestEngineMove(skipCachedCoachMove = false) {
     if (inReplay) return;
     if (!engine || !engine.available || !config.engine.enabled) return;
     if (state.gameOver || gameEnded) return;
@@ -497,9 +521,29 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     }
 
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
+    const key = JSON.stringify([state.turn, fen]);
     const timeLeft = clock[state.turn];
     const thinkTime = Math.min(timeLeft / 30, 2000);
     const engineDepth = config.engine.depth || null;
+
+    const cachedCoachMove = (
+      config.gameType === "coach_bot" &&
+      state.showEnemyArrows &&
+      !skipCachedCoachMove &&
+      randomChance === 0 &&
+      key === lastSuggFen &&
+      lastSuggMoves?.[0]?.move
+    ) ? lastSuggMoves[0].move : null;
+
+    if (cachedCoachMove) {
+      setTimeout(() => {
+        if (!state.engineThinking || inReplay || gameEnded) return;
+        state.engineThinking = false;
+        if (executeUciMove(cachedCoachMove)) return;
+        requestEngineMove(true);
+      }, calcThinkDelay());
+      return;
+    }
 
     // Time budget for the search. Strong bots (e.g. Expert at depth 22) can take
     // far longer than the old fixed 8s cap to reach their target depth in the
@@ -527,13 +571,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         if (!state.engineThinking || inReplay) return;
         state.engineThinking = false;
         const move = parseBestMove(msg);
-        if (move && move.length >= 4 && move !== "0000") {
-          const fr = 8 - parseInt(move[1], 10);
-          const fc = move.charCodeAt(0) - 97;
-          const tr = 8 - parseInt(move[3], 10);
-          const tc = move.charCodeAt(2) - 97;
-          if (executeMove(fr, fc, tr, tc)) return;
-        }
+        if (executeUciMove(move)) return;
         // Engine returned no usable move — last-resort fallback.
         const allMoves = getAllMoves();
         if (allMoves.length > 0) {
