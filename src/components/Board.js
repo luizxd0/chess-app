@@ -400,6 +400,16 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         result,
         playerSide,
         moveCount: Math.floor(state.moveHistory.length / 2),
+        moveHistory: [...state.moveHistory],
+        snapshots: history.map((snapshot) => ({
+          pieces: { ...snapshot.pieces },
+          castlingRights: { ...snapshot.castlingRights },
+          enPassantTarget: snapshot.enPassantTarget ? { ...snapshot.enPassantTarget } : null,
+          turn: snapshot.turn,
+          capturedByWhite: [...snapshot.capturedByWhite],
+          capturedByBlack: [...snapshot.capturedByBlack],
+          lastMove: snapshot.lastMove ? { from: { ...snapshot.lastMove.from }, to: { ...snapshot.lastMove.to } } : null,
+        })),
       });
     }
   }
@@ -423,7 +433,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   function afterMove(fromRow, fromCol, toRow, toCol) {
     const opponent = state.turn;
-    state.moveHistory.push(`${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toCol]}`);
+    state.moveHistory.push(`${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toRow]}`);
 
     clearSuggestionArrows();
     arrowOverlay.clearArrows();
@@ -1021,7 +1031,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       endGame(winningSide, "resign");
     },
     applyMove(fromRow, fromCol, toRow, toCol) {
-      if (gameEnded || inReplay) return;
+      if (gameEnded) return;
+      if (inReplay) exitReplay();
       state.engineThinking = false;
       const ok = executeMove(fromRow, fromCol, toRow, toCol);
       if (!ok) {
