@@ -336,24 +336,26 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
       const cloneDx = finalRect.left - pieceLeft;
       const cloneDy = finalRect.top - pieceTop;
-      if (typeof clone.animate === "function") {
-        const animation = clone.animate(
-          [
-            { transform: "translate(0, 0) scale(1.04)" },
-            { transform: `translate(${cloneDx}px, ${cloneDy}px) scale(1)` },
-          ],
-          { duration: 560, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" }
-        );
-        animation.finished.then(cleanup, cleanup);
-      } else {
-        clone.style.transform = "translate(0, 0) scale(1.04)";
-        requestAnimationFrame(() => {
-          clone.style.transition = "transform 560ms cubic-bezier(0.2, 0.8, 0.2, 1)";
-          clone.style.transform = `translate(${cloneDx}px, ${cloneDy}px) scale(1)`;
-          clone.addEventListener("transitionend", cleanup, { once: true });
-        });
-      }
-      setTimeout(cleanup, 700);
+      const duration = 700;
+      const startedAt = performance.now();
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+      const step = (now) => {
+        if (cleaned) return;
+        const progress = Math.min(1, (now - startedAt) / duration);
+        const eased = easeOut(progress);
+        const scale = 1.12 - 0.12 * eased;
+        clone.style.transform = `translate(${cloneDx * eased}px, ${cloneDy * eased}px) scale(${scale})`;
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          cleanup();
+        }
+      };
+
+      clone.style.transform = "translate(0, 0) scale(1.12)";
+      requestAnimationFrame(step);
+      setTimeout(cleanup, duration + 200);
     });
   }
 
