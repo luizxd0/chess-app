@@ -19,7 +19,7 @@ const el = document.getElementById("app");
 
 let currentBoard = null;
 let engine = null;
-let engineInitAttempted = false;
+let engineInitPromise = null;
 let currentRtc = null;
 let currentMatchmaking = null;
 let currentQueueOverlay = null;
@@ -50,16 +50,18 @@ function getBotLevel(levelId) {
 }
 
 async function initEngine() {
-  if (engineInitAttempted) return engine;
-  engineInitAttempted = true;
+  if (engineInitPromise) return engineInitPromise;
   engine = new StockfishEngine();
-  try {
-    await engine.init();
-  } catch (e) {
-    console.warn("Stockfish init failed:", e);
-    engine.available = false;
-  }
-  return engine;
+  engineInitPromise = (async () => {
+    try {
+      await engine.init();
+    } catch (e) {
+      console.warn("Stockfish init failed:", e);
+      engine.available = false;
+    }
+    return engine;
+  })();
+  return engineInitPromise;
 }
 
 function getSideChoice() {
@@ -482,11 +484,13 @@ function startGameWebRTC(gameId, mySide, isOfferer) {
 
 // ========== Bot Game ==========
 
-function startGame() {
+async function startGame() {
   if (config.gameType === "online") {
     startOnlineGame();
     return;
   }
+
+  await initEngine();
 
   config.isOnline = false;
   config.side = "random";

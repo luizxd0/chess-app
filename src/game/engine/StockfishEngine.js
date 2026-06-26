@@ -193,7 +193,7 @@ export class StockfishEngine {
         const line = e.data;
         if (typeof line !== "string") return;
 
-        if (line.startsWith("info") && line.includes("multipv")) {
+        if (line.startsWith("info")) {
           const pvMatch = line.match(/multipv (\d+)/);
           const pvIndex = pvMatch ? parseInt(pvMatch[1]) - 1 : 0;
           const pvMoveMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
@@ -212,7 +212,14 @@ export class StockfishEngine {
             }
           }
         } else if (line.startsWith("bestmove")) {
-          finish(lines.filter(Boolean).slice(0, count));
+          const finalLines = lines.filter(Boolean).slice(0, count);
+          if (finalLines.length === 0) {
+            const moveMatch = line.match(/^bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+            if (moveMatch) {
+              finalLines.push({ move: moveMatch[1], score: null, depth: null });
+            }
+          }
+          finish(finalLines);
         }
       };
 
