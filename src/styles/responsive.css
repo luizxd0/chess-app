@@ -78,4 +78,28 @@
     padding: 16px;
     gap: 16px;
   }
+
+  /* Keep the in-game action bar (resign / arrow toggles / depth / menu) from
+     overflowing on phones — shrink padding & font so the controls fit. */
+  .game-actions-bar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .action-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+    min-width: 0;
+  }
+
+  .toggle-btn {
+    padding: 6px 8px;
+    font-size: 11px;
+    min-width: 0;
+  }
+
+  .coach-depth {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
 }

@@ -7,7 +7,11 @@ export function createArrowOverlay(boardEl, getPiece) {
   svg.style.height = "100%";
   svg.style.pointerEvents = "none";
   svg.style.zIndex = "5";
-  svg.style.filter = "drop-shadow(0 1px 3px rgba(0, 0, 0, 0.25))";
+  // NOTE: an svg-wide `filter: drop-shadow(...)` was previously set here, but
+  // mutating the engine-arrow children many times per search (interim depth
+  // updates) intermittently left the filter region un-repainted, so the arrow
+  // ended up in the DOM but invisible until a reflow (e.g. toggling arrows).
+  // The (purely cosmetic) shadow is dropped; the solid arrows remain clear.
 
   const manualLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
   const engineLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -21,6 +25,7 @@ export function createArrowOverlay(boardEl, getPiece) {
   let cellCenterCache = new Map();
   let rafMouseEvent = null;
   let rafId = 0;
+  let lastEngineSig = null;   // dedupe identical engine-arrow redraws
 
   function getSquareSize() {
     const first = boardEl.querySelector("[data-row]");
@@ -317,9 +322,18 @@ export function createArrowOverlay(boardEl, getPiece) {
   };
 
   function drawEngineArrows(moves) {
-    clearEngineArrows();
-    if (!moves || moves.length === 0) return;
+    if (!moves || moves.length === 0) { clearEngineArrows(); return; }
     refreshGeometry();
+
+    // Skip redundant redraws: the engine emits the same best move many times
+    // per search (interim depth updates). Re-clearing/re-appending the SVG on
+    // each one caused repaint flicker where the arrow could end up invisible.
+    // The signature includes the board width so a genuine resize still redraws.
+    const widthKey = boardRectCache ? Math.round(boardRectCache.width) : 0;
+    const sig = widthKey + "|" + moves.map((m) => m && m.move).join(",");
+    if (sig === lastEngineSig && engineLayer.firstChild) return;
+
+    clearEngineArrows();
 
     const colors = ["#6BBF59", "#3B82F6"];
     const opacities = [0.85, 0.6];
@@ -346,9 +360,12 @@ export function createArrowOverlay(boardEl, getPiece) {
       arrow.classList.add("engine-arrow");
       engineLayer.appendChild(arrow);
     });
+
+    lastEngineSig = sig;
   }
 
   function clearEngineArrows() {
     while (engineLayer.firstChild) engineLayer.removeChild(engineLayer.firstChild);
+    lastEngineSig = null;
   }
 }
