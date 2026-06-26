@@ -717,7 +717,7 @@ function showAnalysisScreen(analysisData) {
       <div class="analysis-board-wrap">
         <div class="chess-board analysis-board" id="analysis-board"></div>
       </div>
-      <div class="analysis-controls">
+      <div class="analysis-controls" style="grid-template-columns:repeat(2,minmax(0,1fr))">
         <button class="analysis-btn" id="analysis-start">Start</button>
         <button class="analysis-btn" id="analysis-prev">Prev</button>
         <button class="analysis-btn" id="analysis-next">Next</button>
