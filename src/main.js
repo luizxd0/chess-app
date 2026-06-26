@@ -75,6 +75,9 @@ function rowColToUci(row, col) {
 }
 
 function cleanupGame() {
+  if (currentBoard && typeof currentBoard.cleanup === "function") {
+    currentBoard.cleanup();
+  }
   if (currentRtc) { currentRtc.destroy(); currentRtc = null; }
   if (currentMatchmaking) { currentMatchmaking.leaveQueue(); currentMatchmaking = null; }
   if (currentQueueOverlay) { currentQueueOverlay._cancel(); currentQueueOverlay = null; }
@@ -210,7 +213,7 @@ function showSettings(gameType) {
 
   const settings = createSettingsScreen(config, gameType, userInfo, {
     onBack: () => showHome(),
-    onPlay: (cfg) => startGame(),
+    onPlay: () => startGame(),
   });
 
   const inner = document.createElement("div");

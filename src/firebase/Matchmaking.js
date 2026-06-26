@@ -120,16 +120,6 @@ export async function getGameData(firestore, gameId) {
   return snap.exists() ? snap.data() : null;
 }
 
-export function onGameUpdate(firestore, gameId, callback) {
-  return onSnapshot(doc(firestore, "games", gameId), (snap) => {
-    if (snap.exists()) callback(snap.data());
-  });
-}
-
-export async function setGameField(firestore, gameId, field, value) {
-  await setDoc(doc(firestore, "games", gameId), { [field]: value }, { merge: true });
-}
-
 export async function deleteGame(firestore, gameId) {
   await deleteDoc(doc(firestore, "games", gameId)).catch(() => {});
 }

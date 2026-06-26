@@ -1,30 +1,23 @@
 export function createReplay(history, callbacks) {
   let index = history.length - 1;
-  let active = false;
-
   function handleKey(e) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
 
     if (e.key === "ArrowLeft" && index > 0) {
       index--;
-      active = true;
       callbacks.onNavigate(index, history[index]);
     } else if (e.key === "ArrowRight" && index < history.length - 1) {
       index++;
-      active = true;
       callbacks.onNavigate(index, history[index]);
       if (index === history.length - 1) {
-        active = false;
         callbacks.onExit();
       }
     } else if (e.key === "ArrowUp" && index > 0) {
       index = 0;
-      active = true;
       callbacks.onNavigate(index, history[index]);
     } else if (e.key === "ArrowDown" && index < history.length - 1) {
       index = history.length - 1;
-      active = false;
       callbacks.onNavigate(index, history[index]);
       callbacks.onExit();
     }
@@ -32,10 +25,7 @@ export function createReplay(history, callbacks) {
 
   document.addEventListener("keydown", handleKey);
 
-  function isActive() { return active; }
-
   function reset() {
-    active = false;
     index = history.length - 1;
   }
 
@@ -43,5 +33,5 @@ export function createReplay(history, callbacks) {
     document.removeEventListener("keydown", handleKey);
   }
 
-  return { isActive, reset, destroy };
+  return { reset, destroy };
 }

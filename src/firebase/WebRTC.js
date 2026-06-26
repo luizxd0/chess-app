@@ -8,8 +8,6 @@ export function createWebRTC(firestore, gameId, mySide, isOfferer) {
   let channel = null;
   let onMove = null;
   let onOpponentResigned = null;
-  let onConnected = null;
-  let onIceFailure = null;
   let unsub = null;
   let remoteDescSet = false;
   let destroyed = false;
@@ -32,17 +30,9 @@ export function createWebRTC(firestore, gameId, mySide, isOfferer) {
       }
     };
 
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === "failed" && onIceFailure) onIceFailure();
-    };
-
     pc.ondatachannel = (e) => {
       channel = e.channel;
       setupChannel();
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "connected" && onConnected) onConnected();
     };
 
     if (isOfferer) {
@@ -130,7 +120,5 @@ export function createWebRTC(firestore, gameId, mySide, isOfferer) {
     destroy,
     set onMove(v) { onMove = v; },
     set onOpponentResigned(v) { onOpponentResigned = v; },
-    set onConnected(v) { onConnected = v; },
-    set onIceFailure(v) { onIceFailure = v; },
   };
 }

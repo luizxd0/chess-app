@@ -135,7 +135,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   board.className = "chess-board";
 
   boardWrapper.appendChild(board);
-  const arrowOverlay = createArrowOverlay(boardWrapper, (row, col) => state.pieces[`${row}-${col}`] || null);
+  const arrowOverlay = createArrowOverlay(boardWrapper);
   boardWrapper.appendChild(arrowOverlay.svg);
 
   // Bottom player bar (you)
@@ -615,11 +615,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     );
     if (!legalMoves.some(([r, c]) => r === toRow && c === toCol)) return false;
 
-    const fenBefore = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-    const turnBefore = state.turn;
-    const piecesBefore = state.pieces;
-    const uci = `${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toRow]}`;
-
     let captured = state.pieces[`${toRow}-${toCol}`];
     if (!captured && movedPiece && movedPiece.type === "pawn" && fromCol !== toCol) {
       captured = state.pieces[`${fromRow}-${toCol}`];
@@ -689,7 +684,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       row, col, piece, legalMoves,
       cellW: cellRect.width, cellH: cellRect.height,
       startX: e.clientX, startY: e.clientY,
-      clone: null, hiddenPieceEl: null, dragging: false,
+      clone: null, dragging: false,
     };
     handledByDrag = false;
   });
@@ -723,7 +718,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       render();
 
       // render() recreates DOM – hide the source piece in the new DOM.
-      dragState.hiddenPieceEl = hideDraggedPieceAt(dragState.row, dragState.col);
+      hideDraggedPieceAt(dragState.row, dragState.col);
       return;
     }
 

@@ -20,15 +20,6 @@ export function setPlayerElo(elo) {
   localStorage.setItem(STORAGE_KEY, rounded.toString());
 }
 
-export function resetPlayerElo() {
-  const session = getSession();
-  if (session) {
-    setPlayerElo(500);
-  } else {
-    localStorage.removeItem(STORAGE_KEY);
-  }
-}
-
 export function calculateNewElo(playerElo, opponentElo, result) {
   const K = 32;
   const expected = 1 / (1 + Math.pow(10, (opponentElo - playerElo) / 400));

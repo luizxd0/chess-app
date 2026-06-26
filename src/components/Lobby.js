@@ -261,7 +261,6 @@ export function createQueueOverlay(callbacks) {
 
   const interval = setInterval(update, 1000);
 
-  overlay._cleanup = () => clearInterval(interval);
   overlay._cancel = () => {
     clearInterval(interval);
     overlay.remove();
