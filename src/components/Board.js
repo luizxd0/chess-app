@@ -299,21 +299,24 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       const cell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
       const pieceEl = cell?.querySelector(".piece");
       if (!pieceEl || Math.abs(dx) + Math.abs(dy) < 1) return;
-      if (typeof pieceEl.animate !== "function") return;
 
       pieceEl.classList.add("piece-moving");
-      const animation = pieceEl.animate(
-        [
-          { transform: `translate(${dx}px, ${dy}px) scale(1.04)` },
-          { transform: "translate(0, 0) scale(1)" },
-        ],
-        {
-          duration: 260,
-          easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
-        }
-      );
-      animation.addEventListener("finish", () => pieceEl.classList.remove("piece-moving"), { once: true });
-      animation.addEventListener("cancel", () => pieceEl.classList.remove("piece-moving"), { once: true });
+      pieceEl.style.transition = "none";
+      pieceEl.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`;
+      pieceEl.getBoundingClientRect();
+
+      const cleanup = () => {
+        pieceEl.classList.remove("piece-moving");
+        pieceEl.style.transition = "";
+        pieceEl.style.transform = "";
+      };
+
+      requestAnimationFrame(() => {
+        pieceEl.style.transition = "transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+        pieceEl.style.transform = "translate(0, 0) scale(1)";
+        pieceEl.addEventListener("transitionend", cleanup, { once: true });
+        setTimeout(cleanup, 480);
+      });
     });
   }
 
