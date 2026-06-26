@@ -14,16 +14,29 @@ const MODE_META = {
   coach_bot:  { icon: "🧠", iconClass: "coach",   desc: "Bot shows best moves to help you learn" },
 };
 
-export function createHomeScreen(config, userInfo, callbacks) {
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export function createHomeScreen(userInfo, callbacks) {
   const screen = document.createElement("div");
   screen.className = "home-screen";
+  const username = userInfo.username || "Guest";
+  const safeUsername = escapeHtml(username);
+  const safeAvatar = escapeHtml(username.charAt(0).toUpperCase() || "?");
+  const safeElo = escapeHtml(userInfo.elo);
 
   screen.innerHTML = `
     <div class="home-header">
-      <div class="home-avatar">${userInfo.username.charAt(0).toUpperCase()}</div>
+      <div class="home-avatar">${safeAvatar}</div>
       <div class="home-user-info">
-        <div class="home-username">${userInfo.username}</div>
-        <div class="home-elo">⭐ ${userInfo.elo}</div>
+        <div class="home-username">${safeUsername}</div>
+        <div class="home-elo">⭐ ${safeElo}</div>
       </div>
       <button class="home-logout" id="home-logout">Sign Out</button>
     </div>
@@ -67,7 +80,6 @@ export function createSettingsScreen(config, gameType, userInfo, callbacks) {
   const isCasualBot = gameType === "casual_bot";
   const isRankedBot = gameType === "ranked_bot";
   const isCoachBot = gameType === "coach_bot";
-  const isBotGame = isCasualBot || isRankedBot || isCoachBot;
 
   let activeCat = "blitz";
   if (config.timeControlId) {

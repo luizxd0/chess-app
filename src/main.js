@@ -51,6 +51,12 @@ function getBotLevel(levelId) {
   return BOT_LEVELS.find((l) => l.id === levelId);
 }
 
+function syncTimeControl() {
+  config.timeControl = TIME_CONTROLS.find((t) => t.id === config.timeControlId)
+    || TIME_CONTROLS.find((t) => t.id === "blitz5")
+    || TIME_CONTROLS[0];
+}
+
 async function initEngine() {
   if (engineInitPromise) return engineInitPromise;
   engine = new StockfishEngine();
@@ -200,7 +206,7 @@ function showHome() {
     ? { username: user.username, elo: user.elo }
     : { username: "Guest", elo: 500 };
 
-  const home = createHomeScreen(config, userInfo, {
+  const home = createHomeScreen(userInfo, {
     onLogout: async () => {
       await logout();
       showAuth();
@@ -254,6 +260,7 @@ function startOnlineGame() {
 
   config.playerName = user.username;
   config.playerElo = user.elo;
+  syncTimeControl();
   config.isOnline = true;
   config.rated = true;
   config.opponentName = "";
@@ -515,6 +522,7 @@ async function startGame() {
   }
 
   await initEngine();
+  syncTimeControl();
 
   config.isOnline = false;
   config.side = "random";
@@ -709,7 +717,7 @@ function showAnalysisScreen(analysisData) {
       <div class="analysis-board-wrap">
         <div class="chess-board analysis-board" id="analysis-board"></div>
       </div>
-      <div class="analysis-controls">
+      <div class="analysis-controls" style="grid-template-columns:repeat(2,minmax(0,1fr))">
         <button class="analysis-btn" id="analysis-start">Start</button>
         <button class="analysis-btn" id="analysis-prev">Prev</button>
         <button class="analysis-btn" id="analysis-next">Next</button>
