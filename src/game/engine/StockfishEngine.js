@@ -111,9 +111,14 @@ export class StockfishEngine {
       if (seq !== this._seq) { resolve("bestmove 0000"); return; }
 
       let settled = false;
+      let hardTimer = null;
       const finish = (val) => {
         if (settled) return;
         settled = true;
+        if (hardTimer !== null) {
+          clearTimeout(hardTimer);
+          hardTimer = null;
+        }
         this.worker.removeEventListener("message", handler);
         if (this._currentHandler === handler) this._currentHandler = null;
         if (this._currentAbort === abort) this._currentAbort = null;
@@ -137,6 +142,12 @@ export class StockfishEngine {
       this.worker.postMessage("setoption name MultiPV value 1");
       this.worker.postMessage(`position fen ${fen}`);
       this.worker.postMessage(`go movetime ${moveTime}`);
+      hardTimer = setTimeout(() => {
+        if (!settled && seq === this._seq) {
+          this.worker.postMessage("stop");
+          finish("bestmove 0000");
+        }
+      }, moveTime + 2500);
     }));
   }
 

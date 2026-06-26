@@ -499,7 +499,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   function requestEngineMove(skipCachedCoachMove = false) {
     if (inReplay) return;
-    if (!engine || !engine.available || !config.engine.enabled) return;
+    if (!config.engine.enabled) return;
     if (state.gameOver || gameEnded) return;
     if (state.turn === playerSide) return;
 
@@ -524,6 +524,20 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const key = JSON.stringify([state.turn, fen]);
     const timeLeft = clock[state.turn];
     const searchTimeMs = getBotSearchTimeMs(timeLeft);
+    const thinkDelayMs = calcThinkDelay();
+
+    if (!engine || !engine.available) {
+      setTimeout(() => {
+        if (!state.engineThinking || inReplay || gameEnded) return;
+        state.engineThinking = false;
+        const allMoves = getAllMoves();
+        if (allMoves.length > 0) {
+          const [fr, fc, tr, tc] = allMoves[Math.floor(Math.random() * allMoves.length)];
+          executeMove(fr, fc, tr, tc);
+        }
+      }, thinkDelayMs);
+      return;
+    }
 
     const cachedCoachMove = (
       config.gameType === "coach_bot" &&
@@ -588,8 +602,10 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         }
       }, searchTimeMs + 3000);
 
-      engine.goTime(searchTimeMs).then(playBestOrFallback);
-    }, calcThinkDelay());
+      engine.goTime(searchTimeMs)
+        .then(playBestOrFallback)
+        .catch(() => playBestOrFallback("bestmove 0000"));
+    }, thinkDelayMs);
   }
 
   function calcThinkDelay() {
