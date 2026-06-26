@@ -135,7 +135,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   board.className = "chess-board";
 
   boardWrapper.appendChild(board);
-  const arrowOverlay = createArrowOverlay(boardWrapper, (row, col) => state.pieces[`${row}-${col}`] || null);
+  const arrowOverlay = createArrowOverlay(boardWrapper);
   boardWrapper.appendChild(arrowOverlay.svg);
 
   // Bottom player bar (you)
@@ -499,7 +499,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
   function requestEngineMove(skipCachedCoachMove = false) {
     if (inReplay) return;
-    if (!engine || !engine.available || !config.engine.enabled) return;
+    if (!config.engine.enabled) return;
     if (state.gameOver || gameEnded) return;
     if (state.turn === playerSide) return;
 
@@ -523,8 +523,21 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const fen = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
     const key = JSON.stringify([state.turn, fen]);
     const timeLeft = clock[state.turn];
-    const thinkTime = Math.min(timeLeft / 30, 2000);
-    const engineDepth = config.engine.depth || null;
+    const searchTimeMs = getBotSearchTimeMs(timeLeft);
+    const thinkDelayMs = calcThinkDelay();
+
+    if (!engine || !engine.available) {
+      setTimeout(() => {
+        if (!state.engineThinking || inReplay || gameEnded) return;
+        state.engineThinking = false;
+        const allMoves = getAllMoves();
+        if (allMoves.length > 0) {
+          const [fr, fc, tr, tc] = allMoves[Math.floor(Math.random() * allMoves.length)];
+          executeMove(fr, fc, tr, tc);
+        }
+      }, thinkDelayMs);
+      return;
+    }
 
     const cachedCoachMove = (
       config.gameType === "coach_bot" &&
@@ -544,17 +557,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       }, calcThinkDelay());
       return;
     }
-
-    // Time budget for the search. Strong bots (e.g. Expert at depth 22) can take
-    // far longer than the old fixed 8s cap to reach their target depth in the
-    // browser — previously the cap fired and the bot played a RANDOM move,
-    // which is why Expert didn't actually play like an expert. Instead we let
-    // the engine search, then `stop()` it at the budget and use its
-    // best-move-so-far. A random move is only ever a last resort if the engine
-    // never responds at all.
-    const depthBudget = Math.min(6000, Math.max(1200, (engineDepth || 12) * 250));
-    const timeBudget = Math.max(500, timeLeft / 25);
-    const maxThinkMs = Math.min(depthBudget, timeBudget);
 
     // Thinking delay before engine starts (human-like pause)
     setTimeout(() => {
@@ -580,11 +582,11 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         }
       };
 
-      // At the time budget, stop the search so the engine returns its best move
-      // found so far (NOT a random move).
+      // `go movetime` should finish on its own; this is only a nudge for a stuck
+      // worker so the safety fallback below remains exceptional.
       const stopTimer = setTimeout(() => {
         if (!done && state.engineThinking && !inReplay) engine.stop();
-      }, maxThinkMs);
+      }, searchTimeMs + 250);
 
       // Absolute last resort if the engine never replies (e.g. it died).
       const safetyTimer = setTimeout(() => {
@@ -598,16 +600,27 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
             executeMove(fr, fc, tr, tc);
           }
         }
-      }, maxThinkMs + 5000);
+      }, searchTimeMs + 3000);
 
-      engine.goTime(Math.max(100, thinkTime), engineDepth).then(playBestOrFallback);
-    }, calcThinkDelay());
+      engine.goTime(searchTimeMs)
+        .then(playBestOrFallback)
+        .catch(() => playBestOrFallback("bestmove 0000"));
+    }, thinkDelayMs);
   }
 
   function calcThinkDelay() {
     const d = config.engine.depth || 10;
-    const base = Math.max(400, 3500 - d * 120);
-    return base + Math.random() * 800;
+    if (d >= 20) return 250 + Math.random() * 350;
+    if (d >= 14) return 350 + Math.random() * 500;
+    const base = Math.max(500, 2600 - d * 120);
+    return base + Math.random() * 600;
+  }
+
+  function getBotSearchTimeMs(timeLeft) {
+    const d = config.engine.depth || 10;
+    const levelCap = d >= 20 ? 1200 : d >= 14 ? 1000 : d >= 8 ? 800 : 500;
+    const clockCap = Math.max(250, timeLeft / 40);
+    return Math.round(Math.max(250, Math.min(levelCap, clockCap)));
   }
 
   function executeMove(fromRow, fromCol, toRow, toCol) {
@@ -625,11 +638,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       state.enPassantTarget
     );
     if (!legalMoves.some(([r, c]) => r === toRow && c === toCol)) return false;
-
-    const fenBefore = boardToFen(state.pieces, state.turn, state.castlingRights, state.enPassantTarget);
-    const turnBefore = state.turn;
-    const piecesBefore = state.pieces;
-    const uci = `${FILES[fromCol]}${RANKS[fromRow]}${FILES[toCol]}${RANKS[toRow]}`;
 
     let captured = state.pieces[`${toRow}-${toCol}`];
     if (!captured && movedPiece && movedPiece.type === "pawn" && fromCol !== toCol) {
@@ -700,7 +708,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       row, col, piece, legalMoves,
       cellW: cellRect.width, cellH: cellRect.height,
       startX: e.clientX, startY: e.clientY,
-      clone: null, hiddenPieceEl: null, dragging: false,
+      clone: null, dragging: false,
     };
     handledByDrag = false;
   });
@@ -734,7 +742,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       render();
 
       // render() recreates DOM – hide the source piece in the new DOM.
-      dragState.hiddenPieceEl = hideDraggedPieceAt(dragState.row, dragState.col);
+      hideDraggedPieceAt(dragState.row, dragState.col);
       return;
     }
 

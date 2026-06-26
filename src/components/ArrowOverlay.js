@@ -1,4 +1,4 @@
-export function createArrowOverlay(boardEl, getPiece) {
+export function createArrowOverlay(boardEl) {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.style.position = "absolute";
   svg.style.top = "0";

@@ -265,23 +265,6 @@ export async function updateUserStats(elo, stats) {
   } catch {}
 }
 
-export function onAuthChange(callback) {
-  return onAuthStateChanged(getAuthInstance(), (firebaseUser) => {
-    if (firebaseUser) {
-      const cached = getSession();
-      if (cached && cached.uid === firebaseUser.uid) {
-        callback(cached);
-      } else {
-        callback(null);
-      }
-    } else {
-      clearSession();
-      stopHeartbeat();
-      callback(null);
-    }
-  });
-}
-
 /**
  * Remove Firebase auth-related storage without signing the user out of the
  * Firebase SDK.  This is a targeted recovery that avoids forcing users to

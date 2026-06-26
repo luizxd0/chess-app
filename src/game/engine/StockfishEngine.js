@@ -97,7 +97,7 @@ export class StockfishEngine {
     });
   }
 
-  goTime(maxTime, depth) {
+  goTime(maxTime) {
     if (!this.available || !this.worker) {
       const move = this.randomMove();
       return Promise.resolve(move ? `bestmove ${move}` : "bestmove 0000");
@@ -105,14 +105,20 @@ export class StockfishEngine {
 
     const fen = this._fen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     const seq = ++this._seq;
+    const moveTime = Math.max(100, maxTime || 1000);
 
     return this._ensureIdle().then(() => new Promise((resolve) => {
       if (seq !== this._seq) { resolve("bestmove 0000"); return; }
 
       let settled = false;
+      let hardTimer = null;
       const finish = (val) => {
         if (settled) return;
         settled = true;
+        if (hardTimer !== null) {
+          clearTimeout(hardTimer);
+          hardTimer = null;
+        }
         this.worker.removeEventListener("message", handler);
         if (this._currentHandler === handler) this._currentHandler = null;
         if (this._currentAbort === abort) this._currentAbort = null;
@@ -135,11 +141,13 @@ export class StockfishEngine {
       this.worker.postMessage("ucinewgame");
       this.worker.postMessage("setoption name MultiPV value 1");
       this.worker.postMessage(`position fen ${fen}`);
-      if (depth && depth > 0) {
-        this.worker.postMessage(`go depth ${depth}`);
-      } else {
-        this.worker.postMessage(`go movetime ${Math.max(100, maxTime || 1000)}`);
-      }
+      this.worker.postMessage(`go movetime ${moveTime}`);
+      hardTimer = setTimeout(() => {
+        if (!settled && seq === this._seq) {
+          this.worker.postMessage("stop");
+          finish("bestmove 0000");
+        }
+      }, moveTime + 2500);
     }));
   }
 
