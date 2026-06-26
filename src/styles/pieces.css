@@ -10,11 +10,11 @@
 }
 
 .move-animation-clone {
-  position: absolute;
+  position: fixed;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 45;
+  z-index: 5000;
   pointer-events: none;
   will-change: transform;
   transform-origin: center;

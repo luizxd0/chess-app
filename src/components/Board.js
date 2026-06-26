@@ -281,7 +281,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const fromRect = fromCell?.getBoundingClientRect();
     const toRect = toCell?.getBoundingClientRect();
     const pieceRect = movingPiece?.getBoundingClientRect();
-    const wrapperRect = boardWrapper.getBoundingClientRect();
     const dx = fromRect && toRect
       ? fromRect.left + fromRect.width / 2 - (toRect.left + toRect.width / 2)
       : null;
@@ -297,8 +296,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       pieceClassName: movingPiece.className,
       pieceHtml: movingPiece.innerHTML,
       pieceText: movingPiece.textContent,
-      pieceLeft: pieceRect.left - wrapperRect.left,
-      pieceTop: pieceRect.top - wrapperRect.top,
+      pieceLeft: pieceRect.left,
+      pieceTop: pieceRect.top,
       pieceWidth: pieceRect.width,
       pieceHeight: pieceRect.height,
     });
@@ -314,7 +313,6 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       const pieceEl = cell?.querySelector(".piece");
       if (!pieceEl) return;
 
-      const wrapperRect = boardWrapper.getBoundingClientRect();
       const finalRect = pieceEl.getBoundingClientRect();
       const clone = document.createElement("span");
       clone.className = `${pieceClassName || pieceEl.className} move-animation-clone`;
@@ -324,7 +322,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
       clone.style.top = `${pieceTop}px`;
       clone.style.width = `${pieceWidth}px`;
       clone.style.height = `${pieceHeight}px`;
-      boardWrapper.appendChild(clone);
+      document.body.appendChild(clone);
 
       const originalVisibility = pieceEl.style.visibility;
       pieceEl.style.visibility = "hidden";
@@ -336,8 +334,8 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
         pieceEl.style.visibility = originalVisibility;
       };
 
-      const cloneDx = finalRect.left - wrapperRect.left - pieceLeft;
-      const cloneDy = finalRect.top - wrapperRect.top - pieceTop;
+      const cloneDx = finalRect.left - pieceLeft;
+      const cloneDy = finalRect.top - pieceTop;
       if (typeof clone.animate === "function") {
         const animation = clone.animate(
           [
