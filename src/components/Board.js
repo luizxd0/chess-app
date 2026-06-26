@@ -273,20 +273,34 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
   }
 
   function queueMoveAnimation(fromRow, fromCol, toRow, toCol, animate) {
-    if (!animate || fromRow === toRow && fromCol === toCol) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
-
+    const sameSquare = fromRow === toRow && fromCol === toCol;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches || false;
     const fromCell = board.querySelector(`.cell[data-row="${fromRow}"][data-col="${fromCol}"]`);
     const toCell = board.querySelector(`.cell[data-row="${toRow}"][data-col="${toCol}"]`);
-    if (!fromCell || !toCell) return;
+    const movingPiece = fromCell?.querySelector(".piece");
+    const fromRect = fromCell?.getBoundingClientRect();
+    const toRect = toCell?.getBoundingClientRect();
+    const pieceRect = movingPiece?.getBoundingClientRect();
+    const wrapperRect = boardWrapper.getBoundingClientRect();
+    const dx = fromRect && toRect
+      ? fromRect.left + fromRect.width / 2 - (toRect.left + toRect.width / 2)
+      : null;
+    const dy = fromRect && toRect
+      ? fromRect.top + fromRect.height / 2 - (toRect.top + toRect.height / 2)
+      : null;
+    if (!animate || sameSquare || reducedMotion || !fromCell || !toCell || !movingPiece || !pieceRect) return;
+    if (dx === null || dy === null || Math.abs(dx) + Math.abs(dy) < 1) return;
 
-    const fromRect = fromCell.getBoundingClientRect();
-    const toRect = toCell.getBoundingClientRect();
     pendingMoveAnimations.push({
       row: toRow,
       col: toCol,
-      dx: fromRect.left + fromRect.width / 2 - (toRect.left + toRect.width / 2),
-      dy: fromRect.top + fromRect.height / 2 - (toRect.top + toRect.height / 2),
+      pieceClassName: movingPiece.className,
+      pieceHtml: movingPiece.innerHTML,
+      pieceText: movingPiece.textContent,
+      pieceLeft: pieceRect.left - wrapperRect.left,
+      pieceTop: pieceRect.top - wrapperRect.top,
+      pieceWidth: pieceRect.width,
+      pieceHeight: pieceRect.height,
     });
   }
 
@@ -295,28 +309,53 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
     const animations = pendingMoveAnimations;
     pendingMoveAnimations = [];
 
-    animations.forEach(({ row, col, dx, dy }) => {
+    animations.forEach(({ row, col, pieceClassName, pieceHtml, pieceText, pieceLeft, pieceTop, pieceWidth, pieceHeight }) => {
       const cell = board.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
       const pieceEl = cell?.querySelector(".piece");
-      if (!pieceEl || Math.abs(dx) + Math.abs(dy) < 1) return;
+      if (!pieceEl) return;
 
-      pieceEl.classList.add("piece-moving");
-      pieceEl.style.transition = "none";
-      pieceEl.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`;
-      pieceEl.getBoundingClientRect();
+      const wrapperRect = boardWrapper.getBoundingClientRect();
+      const finalRect = pieceEl.getBoundingClientRect();
+      const clone = document.createElement("span");
+      clone.className = `${pieceClassName || pieceEl.className} move-animation-clone`;
+      if (pieceHtml) clone.innerHTML = pieceHtml;
+      else clone.textContent = pieceText || pieceEl.textContent;
+      clone.style.left = `${pieceLeft}px`;
+      clone.style.top = `${pieceTop}px`;
+      clone.style.width = `${pieceWidth}px`;
+      clone.style.height = `${pieceHeight}px`;
+      boardWrapper.appendChild(clone);
 
+      const originalVisibility = pieceEl.style.visibility;
+      pieceEl.style.visibility = "hidden";
+      let cleaned = false;
       const cleanup = () => {
-        pieceEl.classList.remove("piece-moving");
-        pieceEl.style.transition = "";
-        pieceEl.style.transform = "";
+        if (cleaned) return;
+        cleaned = true;
+        clone.remove();
+        pieceEl.style.visibility = originalVisibility;
       };
 
-      requestAnimationFrame(() => {
-        pieceEl.style.transition = "transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1)";
-        pieceEl.style.transform = "translate(0, 0) scale(1)";
-        pieceEl.addEventListener("transitionend", cleanup, { once: true });
-        setTimeout(cleanup, 480);
-      });
+      const cloneDx = finalRect.left - wrapperRect.left - pieceLeft;
+      const cloneDy = finalRect.top - wrapperRect.top - pieceTop;
+      if (typeof clone.animate === "function") {
+        const animation = clone.animate(
+          [
+            { transform: "translate(0, 0) scale(1.04)" },
+            { transform: `translate(${cloneDx}px, ${cloneDy}px) scale(1)` },
+          ],
+          { duration: 380, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" }
+        );
+        animation.finished.then(cleanup, cleanup);
+      } else {
+        clone.style.transform = "translate(0, 0) scale(1.04)";
+        requestAnimationFrame(() => {
+          clone.style.transition = "transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+          clone.style.transform = `translate(${cloneDx}px, ${cloneDy}px) scale(1)`;
+          clone.addEventListener("transitionend", cleanup, { once: true });
+        });
+      }
+      setTimeout(cleanup, 480);
     });
   }
 

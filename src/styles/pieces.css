@@ -9,9 +9,15 @@
   pointer-events: none;
 }
 
-.piece-moving {
-  z-index: 30;
+.move-animation-clone {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 45;
+  pointer-events: none;
   will-change: transform;
+  transform-origin: center;
 }
 
 .piece svg {
