@@ -2,11 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import firebaseConfig from "./firebase/Config.js";
 import { createBoard } from "./components/Board.js";
+import { createPiece } from "./components/Piece.js";
 import { createHomeScreen, createSettingsScreen, createQueueOverlay } from "./components/Lobby.js";
 import { initialPieces } from "./data/initialPieces.js";
 import { getPlayerElo, setPlayerElo, calculateNewElo, updatePlayerStats } from "./game/elo.js";
 import { StockfishEngine } from "./game/engine/StockfishEngine.js";
 import { WHITE, BLACK } from "./game/chess.js";
+import { BOARD_SIZE, FILES, RANKS } from "./config/boardConfig.js";
 import { TIME_CONTROLS, BOT_LEVELS } from "./config/gameModes.js";
 import { isLoggedIn, getCurrentUser, logout, login, register, initSession, checkAndRecoverAuth } from "./auth/Auth.js";
 import { createMatchmaking, getGameData, deleteGame } from "./firebase/Matchmaking.js";
@@ -72,6 +74,25 @@ function getSideChoice() {
 
 function rowColToUci(row, col) {
   return String.fromCharCode(97 + col) + (8 - row);
+}
+
+function cloneAnalysisData(result) {
+  if (!result || !Array.isArray(result.snapshots)) return null;
+  return {
+    playerSide: result.playerSide,
+    result: result.result,
+    winner: result.winner,
+    moveHistory: Array.isArray(result.moveHistory) ? [...result.moveHistory] : [],
+    snapshots: result.snapshots.map((snapshot) => ({
+      pieces: { ...snapshot.pieces },
+      castlingRights: { ...snapshot.castlingRights },
+      enPassantTarget: snapshot.enPassantTarget ? { ...snapshot.enPassantTarget } : null,
+      turn: snapshot.turn,
+      capturedByWhite: [...(snapshot.capturedByWhite || [])],
+      capturedByBlack: [...(snapshot.capturedByBlack || [])],
+      lastMove: snapshot.lastMove ? { from: { ...snapshot.lastMove.from }, to: { ...snapshot.lastMove.to } } : null,
+    })),
+  };
 }
 
 function cleanupGame() {
@@ -594,6 +615,7 @@ async function startGame() {
 function showGameOverModal(result, oldElo, newElo, rated) {
   const existing = document.querySelector(".game-over-overlay");
   if (existing) existing.remove();
+  const analysisData = cloneAnalysisData(result);
 
   const overlay = document.createElement("div");
   overlay.className = "game-over-overlay";
@@ -637,8 +659,17 @@ function showGameOverModal(result, oldElo, newElo, rated) {
     <p class="game-over-text ${titleClass}">${subtitle}</p>
     ${eloHtml ? `<p class="game-over-rating">${eloHtml}</p>` : ""}
     ${casualNote}
+    ${analysisData ? '<button class="play-again analyze-match" id="analyze-match">Analyse Match</button>' : ""}
     <button class="play-again" id="back-to-menu">Main Menu</button>
   `;
+
+  const analyzeBtn = modal.querySelector("#analyze-match");
+  if (analyzeBtn && analysisData) {
+    analyzeBtn.addEventListener("click", () => {
+      overlay.remove();
+      showAnalysisScreen(analysisData);
+    });
+  }
 
   modal.querySelector("#back-to-menu").addEventListener("click", () => {
     overlay.remove();
@@ -647,6 +678,152 @@ function showGameOverModal(result, oldElo, newElo, rated) {
 
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+}
+
+function showAnalysisScreen(analysisData) {
+  if (!analysisData || !analysisData.snapshots || analysisData.snapshots.length === 0) {
+    showHome();
+    return;
+  }
+
+  cleanupGame();
+  el.innerHTML = "";
+  el.className = "app";
+
+  const playerSide = analysisData.playerSide || WHITE;
+  let index = analysisData.snapshots.length - 1;
+
+  const inner = document.createElement("div");
+  inner.className = "app-inner";
+  const screen = document.createElement("div");
+  screen.className = "analysis-screen";
+  screen.innerHTML = `
+    <div class="analysis-header">
+      <button class="settings-back" id="analysis-back">←</button>
+      <div>
+        <div class="analysis-title">Match Analysis</div>
+        <div class="analysis-subtitle" id="analysis-subtitle"></div>
+      </div>
+    </div>
+    <div class="analysis-content">
+      <div class="analysis-board-wrap">
+        <div class="chess-board analysis-board" id="analysis-board"></div>
+      </div>
+      <div class="analysis-controls">
+        <button class="analysis-btn" id="analysis-start">Start</button>
+        <button class="analysis-btn" id="analysis-prev">Prev</button>
+        <button class="analysis-btn" id="analysis-next">Next</button>
+        <button class="analysis-btn" id="analysis-live">Latest</button>
+      </div>
+      <div class="analysis-panel">
+        <div class="analysis-panel-title">Moves</div>
+        <div class="analysis-moves" id="analysis-moves"></div>
+      </div>
+    </div>
+  `;
+  inner.appendChild(screen);
+  el.appendChild(inner);
+
+  const boardEl = screen.querySelector("#analysis-board");
+  const subtitleEl = screen.querySelector("#analysis-subtitle");
+  const movesEl = screen.querySelector("#analysis-moves");
+
+  function sizeBoard() {
+    const wrapRect = boardEl.parentElement.getBoundingClientRect();
+    const maxHeight = Math.max(260, (window.innerHeight || 700) * 0.56);
+    const px = Math.max(240, Math.min(wrapRect.width - 8, maxHeight, 560));
+    boardEl.style.width = px + "px";
+    boardEl.style.height = px + "px";
+    boardEl.style.setProperty("--piece-size", (px / 8 * 0.82) + "px");
+  }
+
+  function renderBoard() {
+    const snapshot = analysisData.snapshots[index];
+    boardEl.innerHTML = "";
+    const rows = [...Array(BOARD_SIZE).keys()];
+    const cols = [...Array(BOARD_SIZE).keys()];
+    const renderRows = playerSide === BLACK ? rows.reverse() : rows;
+    const renderCols = playerSide === BLACK ? cols.reverse() : cols;
+
+    for (const row of renderRows) {
+      for (const col of renderCols) {
+        const squareColor = (row + col) % 2 === 0 ? "light" : "dark";
+        const cell = document.createElement("div");
+        cell.className = `cell ${squareColor}`;
+        cell.dataset.row = row;
+        cell.dataset.col = col;
+
+        if (snapshot.lastMove) {
+          if (snapshot.lastMove.from.row === row && snapshot.lastMove.from.col === col) {
+            cell.classList.add("last-move-from");
+          }
+          if (snapshot.lastMove.to.row === row && snapshot.lastMove.to.col === col) {
+            cell.classList.add("last-move-to");
+          }
+        }
+
+        const pieceData = snapshot.pieces[`${row}-${col}`];
+        if (pieceData) cell.appendChild(createPiece(pieceData));
+
+        if (col === (playerSide === BLACK ? 7 : 0)) {
+          const label = document.createElement("span");
+          label.className = "coord rank-coord";
+          label.textContent = RANKS[row];
+          cell.appendChild(label);
+        }
+        if (row === (playerSide === BLACK ? 0 : BOARD_SIZE - 1)) {
+          const label = document.createElement("span");
+          label.className = "coord file-coord";
+          label.textContent = FILES[col];
+          cell.appendChild(label);
+        }
+        boardEl.appendChild(cell);
+      }
+    }
+
+    subtitleEl.textContent = index === 0
+      ? "Starting position"
+      : `Move ${index}/${analysisData.snapshots.length - 1}: ${analysisData.moveHistory[index - 1] || ""}`;
+    renderMoves();
+  }
+
+  function renderMoves() {
+    movesEl.innerHTML = "";
+    analysisData.moveHistory.forEach((move, moveIdx) => {
+      const btn = document.createElement("button");
+      btn.className = `analysis-move${moveIdx + 1 === index ? " active" : ""}`;
+      btn.textContent = `${moveIdx + 1}. ${move}`;
+      btn.addEventListener("click", () => {
+        index = moveIdx + 1;
+        renderBoard();
+      });
+      movesEl.appendChild(btn);
+    });
+  }
+
+  function goTo(nextIndex) {
+    index = Math.max(0, Math.min(nextIndex, analysisData.snapshots.length - 1));
+    renderBoard();
+  }
+
+  const onAnalysisResize = () => {
+    sizeBoard();
+    renderBoard();
+  };
+  const leaveAnalysis = () => {
+    window.removeEventListener("resize", onAnalysisResize);
+    showHome();
+  };
+
+  screen.querySelector("#analysis-back").addEventListener("click", leaveAnalysis);
+  screen.querySelector("#analysis-start").addEventListener("click", () => goTo(0));
+  screen.querySelector("#analysis-prev").addEventListener("click", () => goTo(index - 1));
+  screen.querySelector("#analysis-next").addEventListener("click", () => goTo(index + 1));
+  screen.querySelector("#analysis-live").addEventListener("click", () => goTo(analysisData.snapshots.length - 1));
+  window.addEventListener("resize", onAnalysisResize);
+
+  sizeBoard();
+  renderBoard();
 }
 
 function showResignConfirm(onConfirm) {
