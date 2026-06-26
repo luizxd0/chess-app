@@ -335,7 +335,7 @@ export function createBoard(rootElement, pieces, config, engine, callbacks) {
 
       const cloneDx = finalRect.left - pieceLeft;
       const cloneDy = finalRect.top - pieceTop;
-      const duration = 700;
+      const duration = 900;
       const startedAt = performance.now();
       const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
