@@ -3,7 +3,7 @@ export class Engine {
   private onMessage: ((line: string) => void) | null = null;
 
   constructor() {
-    this.worker = new Worker("./stockfish.js");
+    this.worker = new Worker("/stockfish.js");
     this.worker.onmessage = (e) => {
       if (this.onMessage) this.onMessage(e.data);
     };
