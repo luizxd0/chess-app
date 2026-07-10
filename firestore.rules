@@ -25,54 +25,11 @@ service cloud.firestore {
     }
 
     match /queue/{userId} {
-      function isValidQueue(data) {
-        return data.keys().hasAll(['uid', 'elo', 'joinedAt']) &&
-               data.uid == userId &&
-               data.uid == request.auth.uid &&
-               data.elo is number &&
-               data.joinedAt == request.time;
-      }
-      
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && isValidQueue(incoming());
-      allow delete: if isSignedIn(); // Allow anyone to delete from queue when matching
+      allow read, delete, create, update: if isSignedIn();
     }
 
     match /games/{gameId} {
-      function isValidGame(data) {
-        return data.keys().hasAll(['whiteId', 'blackId', 'fen', 'status', 'turn', 'createdAt', 'updatedAt']) &&
-               data.whiteId is string && data.whiteId.size() <= 128 &&
-               data.blackId is string && data.blackId.size() <= 128 &&
-               data.fen is string && data.fen.size() <= 150 &&
-               data.status in ["playing", "white_won", "black_won", "draw"] &&
-               data.turn in ["w", "b"] &&
-               data.createdAt == request.time &&
-               data.updatedAt == request.time;
-      }
-
-      function isParticipant() {
-        return request.auth.uid == existing().whiteId || request.auth.uid == existing().blackId;
-      }
-
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(gameId) && 
-        (incoming().whiteId == request.auth.uid || incoming().blackId == request.auth.uid) && 
-        isValidGame(incoming());
-      
-      allow update: if isSignedIn() && isParticipant() && (
-        (incoming().diff(existing()).affectedKeys().hasOnly(['fen', 'status', 'turn', 'updatedAt']) &&
-        incoming().fen is string && incoming().fen.size() <= 150 &&
-        incoming().status in ["playing", "white_won", "black_won", "draw"] &&
-        incoming().turn in ["w", "b"] &&
-        incoming().updatedAt == request.time)
-        ||
-        (incoming().diff(existing()).affectedKeys().hasOnly(['fen', 'status', 'turn', 'updatedAt', 'pgn']) &&
-        incoming().fen is string && incoming().fen.size() <= 150 &&
-        incoming().status in ["playing", "white_won", "black_won", "draw"] &&
-        incoming().turn in ["w", "b"] &&
-        incoming().pgn is string && incoming().pgn.size() <= 5000 &&
-        incoming().updatedAt == request.time)
-      );
+      allow read, create, update, delete: if isSignedIn();
     }
   }
 }

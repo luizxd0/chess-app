@@ -31,13 +31,13 @@ export default function OnlineGame() {
     const findMatch = async () => {
       try {
         const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
+        const userSnap = await getDoc(userRef).catch(err => { throw new Error('getDoc users failed: ' + err.message); });
         const currentElo = userSnap.exists() ? userSnap.data().elo : 500;
         setMyElo(currentElo);
 
         const queueRef = collection(db, 'queue');
         const q = query(queueRef, limit(1));
-        const snapshot = await getDocs(q);
+        const snapshot = await getDocs(q).catch(err => { throw new Error('getDocs queue failed: ' + err.message); });
         
         let matched = false;
 
@@ -71,8 +71,9 @@ export default function OnlineGame() {
               setOppElo(queueDoc.data().elo || 500);
               matched = true;
               break;
-            } catch (e) {
+            } catch (e: any) {
               console.error("Transaction failed", e);
+              throw new Error('Transaction failed: ' + e.message);
             }
           }
         }
@@ -83,7 +84,7 @@ export default function OnlineGame() {
             name: user.displayName || user.email?.split('@')[0] || 'Anonymous',
             elo: currentElo,
             joinedAt: serverTimestamp()
-          });
+          }).catch(err => { throw new Error('setDoc queue failed: ' + err.message); });
           setColor('white');
         }
 
@@ -111,15 +112,15 @@ export default function OnlineGame() {
                   } else {
                     setGameOverStats({ winner: null, type: 'draw' });
                   }
-                } else if (chess.inCheck()) {
-                  // playCheckSound() could be here
                 }
               }
             }
           }
+        }, err => {
+          console.error("onSnapshot games failed:", err);
         });
-      } catch (err) {
-        console.error("Matchmaking error:", err);
+      } catch (err: any) {
+        console.error("Matchmaking error:", err.message);
       }
     };
 
@@ -190,7 +191,6 @@ export default function OnlineGame() {
       dests.set(m.from, list);
     });
   }
-
 
   const config: Config = {
     fen,
