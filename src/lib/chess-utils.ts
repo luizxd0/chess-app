@@ -16,3 +16,16 @@ export function getMaterialDifference(chess: Chess) {
 
   return { white: w, black: b, advantage: w - b };
 }
+
+export function getKingSquare(chess: any, color: 'w' | 'b'): string | null {
+  const board = chess.board();
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const piece = board[r][c];
+      if (piece && piece.type === 'k' && piece.color === color) {
+        return String.fromCharCode(97 + c) + (8 - r);
+      }
+    }
+  }
+  return null;
+}

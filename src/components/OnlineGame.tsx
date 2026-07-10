@@ -5,7 +5,7 @@ import ChessBoard from './ChessBoard';
 import { Config } from 'chessground/config';
 import { playMoveSound, playCaptureSound } from '../lib/sounds';
 import { auth, db } from '../lib/firebase';
-import { collection, doc, runTransaction, onSnapshot, setDoc, getDocs, query, limit, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, runTransaction, onSnapshot, setDoc, getDocs, query, limit, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { getMaterialDifference } from '../lib/chess-utils';
 
@@ -17,6 +17,9 @@ export default function OnlineGame() {
   const [color, setColor] = useState<'white' | 'black' | null>(null);
   const [opponentName, setOpponentName] = useState<string>('Opponent');
   const [status, setStatus] = useState<string>('finding_match');
+  const [myElo, setMyElo] = useState<number>(500);
+  const [oppElo, setOppElo] = useState<number>(500);
+  const [gameOverStats, setGameOverStats] = useState<{ winner: string | null, type: string } | null>(null);
   
   const user = auth.currentUser;
 
@@ -27,6 +30,11 @@ export default function OnlineGame() {
 
     const findMatch = async () => {
       try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        const currentElo = userSnap.exists() ? userSnap.data().elo : 500;
+        setMyElo(currentElo);
+
         const queueRef = collection(db, 'queue');
         const q = query(queueRef, limit(1));
         const snapshot = await getDocs(q);
@@ -47,6 +55,8 @@ export default function OnlineGame() {
                   blackId: user.uid,
                   whiteName: docSnap.data().name || 'Anonymous',
                   blackName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
+                  whiteElo: docSnap.data().elo || 500,
+                  blackElo: currentElo,
                   fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
                   turn: 'w',
                   status: 'playing',
@@ -58,6 +68,7 @@ export default function OnlineGame() {
               setGameId(gameRef.id);
               setColor('black');
               setOpponentName(queueDoc.data().name || 'Anonymous');
+              setOppElo(queueDoc.data().elo || 500);
               matched = true;
               break;
             } catch (e) {
@@ -70,7 +81,7 @@ export default function OnlineGame() {
           await setDoc(doc(db, 'queue', user.uid), {
             uid: user.uid,
             name: user.displayName || user.email?.split('@')[0] || 'Anonymous',
-            elo: 1200,
+            elo: currentElo,
             joinedAt: serverTimestamp()
           });
           setColor('white');
@@ -85,6 +96,7 @@ export default function OnlineGame() {
                 setGameId(change.doc.id);
                 setColor(gameData.whiteId === user.uid ? 'white' : 'black');
                 setOpponentName(gameData.whiteId === user.uid ? gameData.blackName : gameData.whiteName);
+                setOppElo(gameData.whiteId === user.uid ? gameData.blackElo : gameData.whiteElo);
                 setStatus('playing');
               }
               
@@ -92,12 +104,22 @@ export default function OnlineGame() {
                 chess.load(gameData.fen);
                 setFen(gameData.fen);
                 playMoveSound();
+                
+                if (chess.isGameOver()) {
+                  if (chess.isCheckmate()) {
+                    setGameOverStats({ winner: chess.turn() === 'w' ? 'black' : 'white', type: 'checkmate' });
+                  } else {
+                    setGameOverStats({ winner: null, type: 'draw' });
+                  }
+                } else if (chess.inCheck()) {
+                  // playCheckSound() could be here
+                }
               }
             }
           }
         });
       } catch (err) {
-        console.error("Matchmaking error", err);
+        console.error("Matchmaking error:", err);
       }
     };
 
@@ -119,26 +141,49 @@ export default function OnlineGame() {
       if (move.captured) playCaptureSound();
       else playMoveSound();
       
-      if (gameId) {
-        let gameStatus = 'playing';
-        if (chess.isGameOver()) {
-          if (chess.isCheckmate()) gameStatus = chess.turn() === 'w' ? 'black_won' : 'white_won';
-          else gameStatus = 'draw';
+      let gameStatus = 'playing';
+      if (chess.isGameOver()) {
+        if (chess.isCheckmate()) {
+          gameStatus = chess.turn() === 'w' ? 'black_won' : 'white_won';
+          setGameOverStats({ winner: chess.turn() === 'w' ? 'black' : 'white', type: 'checkmate' });
+        } else {
+          gameStatus = 'draw';
+          setGameOverStats({ winner: null, type: 'draw' });
         }
+      }
+
+      if (gameId) {
         await setDoc(doc(db, 'games', gameId), {
           fen: chess.fen(),
           turn: chess.turn(),
           status: gameStatus,
           updatedAt: serverTimestamp()
         }, { merge: true });
+        
+        // If game over, update elo
+        if (gameStatus !== 'playing') {
+          const userRef = doc(db, 'users', user!.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const currentElo = userSnap.data().elo || 500;
+            // Simple elo change: +20 for win, -20 for loss, 0 for draw
+            let diff = 0;
+            if (gameStatus === 'draw') diff = 0;
+            else if ((gameStatus === 'white_won' && color === 'white') || (gameStatus === 'black_won' && color === 'black')) diff = 20;
+            else diff = -20;
+            
+            await setDoc(userRef, { elo: Math.max(0, currentElo + diff) }, { merge: true });
+            setMyElo(Math.max(0, currentElo + diff));
+          }
+        }
       }
     } catch (e) {
       setFen(chess.fen());
     }
-  }, [chess, gameId]);
+  }, [chess, gameId, color, user]);
 
   const dests = new Map<any, any>();
-  if (color && (chess.turn() === 'w' ? 'white' : 'black') === color) {
+  if (color && (chess.turn() === 'w' ? 'white' : 'black') === color && !gameOverStats) {
     chess.moves({ verbose: true }).forEach(m => {
       const list = dests.get(m.from) || [];
       list.push(m.to);
@@ -146,10 +191,12 @@ export default function OnlineGame() {
     });
   }
 
+
   const config: Config = {
     fen,
     turnColor: chess.turn() === 'w' ? 'white' : 'black',
     orientation: color || 'white',
+    check: chess.inCheck(),
     lastMove: chess.history({ verbose: true }).length > 0 
       ? [chess.history({ verbose: true })[chess.history({ verbose: true }).length - 1].from, chess.history({ verbose: true })[chess.history({ verbose: true }).length - 1].to] 
       : undefined,
@@ -200,7 +247,7 @@ export default function OnlineGame() {
               {opponentName}
               {oppAdvantage > 0 && <span className="text-xs bg-[#262421] px-2 py-1 rounded text-[#779556]">+{oppAdvantage}</span>}
             </h2>
-            <p className="text-sm text-gray-400">Rating: ~1200</p>
+            <p className="text-sm text-gray-400">Rating: {oppElo}</p>
           </div>
           <div className="w-12 h-12 rounded-full bg-[#403d39] flex items-center justify-center font-bold text-xl">
             {opponentName[0]?.toUpperCase()}
@@ -210,10 +257,13 @@ export default function OnlineGame() {
       
       <div className="w-full max-w-[600px] flex items-center justify-center bg-[#262421] p-4 rounded-xl shadow-2xl relative">
         <ChessBoard config={config} />
-        {chess.isGameOver() && (
-          <div className="absolute inset-0 bg-black/60 rounded-xl flex flex-col items-center justify-center">
-            <h2 className="text-4xl font-bold text-white mb-4">Game Over</h2>
-            <button onClick={() => setGameMode('menu')} className="px-6 py-3 bg-[#779556] hover:bg-[#69824c] rounded-xl font-bold text-lg transition-colors">
+        {gameOverStats && (
+          <div className="absolute inset-0 bg-black/70 rounded-xl flex flex-col items-center justify-center animate-in fade-in duration-500 z-10">
+            <h2 className="text-5xl font-bold text-white mb-2 shadow-sm drop-shadow-lg">
+              {gameOverStats.winner === color ? 'You Won!' : gameOverStats.winner ? 'You Lost' : 'Draw'}
+            </h2>
+            <p className="text-xl text-gray-300 mb-6 capitalize">by {gameOverStats.type}</p>
+            <button onClick={() => setGameMode('menu')} className="px-8 py-4 bg-[#779556] hover:bg-[#69824c] rounded-xl font-bold text-xl transition-colors shadow-lg">
               Return to Menu
             </button>
           </div>
@@ -230,7 +280,7 @@ export default function OnlineGame() {
               {user?.displayName || user?.email?.split('@')[0] || 'You'}
               {myAdvantage > 0 && <span className="text-xs bg-[#262421] px-2 py-1 rounded text-[#779556]">+{myAdvantage}</span>}
             </h2>
-            <p className="text-sm text-gray-400">Rating: 1200</p>
+            <p className="text-sm text-gray-400">Rating: {myElo}</p>
           </div>
         </div>
       </div>

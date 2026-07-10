@@ -1,5 +1,3 @@
-
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '../store';
 import { Chess } from 'chess.js';
@@ -10,6 +8,7 @@ import { DrawShape } from 'chessground/draw';
 import { bots, Bot } from '../data/bots';
 import { playMoveSound, playCaptureSound } from '../lib/sounds';
 import { getMaterialDifference } from '../lib/chess-utils';
+import { Lightbulb } from 'lucide-react';
 
 export default function ComputerGame() {
   const setGameMode = useAppStore((state) => state.setGameMode);
@@ -19,6 +18,7 @@ export default function ComputerGame() {
   const [isThinking, setIsThinking] = useState(false);
   const [showTips, setShowTips] = useState(false);
   const [tipsShapes, setTipsShapes] = useState<DrawShape[]>([]);
+  const [gameOverStats, setGameOverStats] = useState<{ winner: string | null, type: string } | null>(null);
 
   const engine = useMemo(() => new Engine(), []);
   const tipsEngine = useMemo(() => new Engine(), []);
@@ -61,6 +61,20 @@ export default function ComputerGame() {
     }
   }, [showTips, fen, chess, updateTips]);
 
+  const checkGameOver = useCallback(() => {
+    if (chess.isGameOver()) {
+      if (chess.isCheckmate()) {
+        setGameOverStats({ winner: chess.turn() === 'w' ? 'black' : 'white', type: 'checkmate' });
+      } else if (chess.isStalemate()) {
+        setGameOverStats({ winner: null, type: 'stalemate' });
+      } else {
+        setGameOverStats({ winner: null, type: 'draw' });
+      }
+      return true;
+    }
+    return false;
+  }, [chess]);
+
   const onMove = useCallback(async (orig: string, dest: string) => {
     try {
       setTipsShapes([]); // clear tips immediately on move
@@ -70,7 +84,7 @@ export default function ComputerGame() {
       if (move.captured) playCaptureSound();
       else playMoveSound();
       
-      if (!chess.isGameOver()) {
+      if (!checkGameOver()) {
         setIsThinking(true);
         
         // Add a small artificial delay so the bot doesn't play instantly
@@ -94,17 +108,19 @@ export default function ComputerGame() {
           
           if (engineMove.captured) playCaptureSound();
           else playMoveSound();
+
+          checkGameOver();
         }
         setIsThinking(false);
       }
     } catch (e) {
       setFen(chess.fen());
     }
-  }, [chess, engine, selectedBot]);
+  }, [chess, engine, selectedBot, checkGameOver]);
 
   const turnColor = chess.turn() === 'w' ? 'white' : 'black';
   const dests = new Map<any, any>();
-  if (chess.turn() === 'w') {
+  if (chess.turn() === 'w' && !gameOverStats) {
     chess.moves({ verbose: true }).forEach(m => {
       const list = dests.get(m.from) || [];
       list.push(m.to);
@@ -112,9 +128,11 @@ export default function ComputerGame() {
     });
   }
 
+
   const config: Config = {
     fen,
     turnColor,
+    check: chess.inCheck(),
     lastMove: chess.history({ verbose: true }).length > 0 
       ? [chess.history({ verbose: true })[chess.history({ verbose: true }).length - 1].from, chess.history({ verbose: true })[chess.history({ verbose: true }).length - 1].to] 
       : undefined,
@@ -183,6 +201,7 @@ export default function ComputerGame() {
               setSelectedBot(null);
               chess.reset();
               setFen(chess.fen());
+              setGameOverStats(null);
             }}
             className="text-gray-400 hover:text-white transition-colors px-4 py-2 rounded-lg bg-[#262421] w-max"
           >
@@ -191,10 +210,10 @@ export default function ComputerGame() {
           
           <button
             onClick={() => setShowTips(prev => !prev)}
-            className={`px-4 py-2 rounded-lg font-semibold transition-colors w-max flex items-center gap-2 ${showTips ? 'bg-[#779556] text-white' : 'bg-[#262421] text-gray-400 hover:text-white'}`}
+            className={`p-2 rounded-lg transition-colors w-max flex items-center justify-center ${showTips ? 'bg-[#779556] text-white' : 'bg-[#262421] text-gray-400 hover:text-white'}`}
+            title="Engine Tips"
           >
-            <div className={`w-3 h-3 rounded-full ${showTips ? 'bg-white' : 'bg-transparent border border-gray-400'}`}></div>
-            Engine Tips
+            <Lightbulb size={24} />
           </button>
         </div>
         
@@ -210,8 +229,24 @@ export default function ComputerGame() {
         </div>
       </div>
       
-      <div className="w-full max-w-[600px] flex items-center justify-center bg-[#262421] p-4 rounded-xl shadow-2xl">
+      <div className="w-full max-w-[600px] flex items-center justify-center bg-[#262421] p-4 rounded-xl shadow-2xl relative">
         <ChessBoard config={config} />
+        {gameOverStats && (
+          <div className="absolute inset-0 bg-black/70 rounded-xl flex flex-col items-center justify-center animate-in fade-in duration-500 z-10">
+            <h2 className="text-5xl font-bold text-white mb-2 shadow-sm drop-shadow-lg">
+              {gameOverStats.winner === 'white' ? 'You Won!' : gameOverStats.winner === 'black' ? 'Computer Won' : 'Draw'}
+            </h2>
+            <p className="text-xl text-gray-300 mb-6 capitalize">by {gameOverStats.type}</p>
+            <button onClick={() => {
+              setSelectedBot(null);
+              chess.reset();
+              setFen(chess.fen());
+              setGameOverStats(null);
+            }} className="px-8 py-4 bg-[#779556] hover:bg-[#69824c] rounded-xl font-bold text-xl transition-colors shadow-lg">
+              Play Again
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 flex w-full max-w-2xl justify-start items-center">
