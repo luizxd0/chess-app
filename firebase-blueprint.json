@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with ELO rating",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "elo": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "elo"]
+    },
+    "QueueEntry": {
+      "title": "QueueEntry",
+      "description": "A player looking for a match",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "elo": { "type": "number" },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["uid", "elo", "joinedAt"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "An active or completed chess game",
+      "type": "object",
+      "properties": {
+        "whiteId": { "type": "string", "maxLength": 128 },
+        "blackId": { "type": "string", "maxLength": 128 },
+        "fen": { "type": "string", "maxLength": 150 },
+        "pgn": { "type": "string", "maxLength": 5000 },
+        "status": { "type": "string", "enum": ["playing", "white_won", "black_won", "draw"] },
+        "turn": { "type": "string", "enum": ["w", "b"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["whiteId", "blackId", "fen", "status", "turn", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "queue/{userId}": {
+      "schema": { "$ref": "#/entities/QueueEntry" },
+      "description": "Matchmaking queue"
+    },
+    "games/{gameId}": {
+      "schema": { "$ref": "#/entities/Game" },
+      "description": "Games"
+    }
+  }
+}

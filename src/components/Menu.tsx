@@ -19,10 +19,10 @@ export default function Menu() {
         </button>
         
         <button 
-          onClick={() => setGameMode('friend')}
+          onClick={() => setGameMode('online')}
           className="w-full py-4 bg-[#262421] hover:bg-[#302e2a] rounded-xl text-xl font-semibold transition-colors flex items-center justify-center gap-3"
         >
-          Play vs Friend
+          Play Online
         </button>
       </div>
 

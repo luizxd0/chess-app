@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from './store';
 import Menu from './components/Menu';
 import ComputerGame from './components/ComputerGame';
-import MultiplayerGame from './components/MultiplayerGame';
+import OnlineGame from './components/OnlineGame';
 import Login from './components/Login';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -38,7 +38,7 @@ export default function App() {
     <>
       {gameMode === 'menu' && <Menu />}
       {gameMode === 'computer' && <ComputerGame />}
-      {gameMode === 'friend' && <MultiplayerGame />}
+      {gameMode === 'online' && <OnlineGame />}
     </>
   );
 }

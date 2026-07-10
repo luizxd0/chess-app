@@ -27,6 +27,11 @@ export default function ChessBoard({ config, className = '' }: ChessBoardProps) 
   useEffect(() => {
     if (cgRef.current && config) {
       cgRef.current.set(config);
+      // If it's now our turn, and there's a stored premove, chessground can play it
+      // if we call playPremove()
+      if (config.turnColor === (config.movable?.color || 'white')) {
+        cgRef.current.playPremove();
+      }
     }
   }, [config]);
 

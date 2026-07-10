@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
 interface AppState {
-  gameMode: 'menu' | 'computer' | 'friend';
-  setGameMode: (mode: 'menu' | 'computer' | 'friend') => void;
+  gameMode: 'menu' | 'computer' | 'online';
+  setGameMode: (mode: 'menu' | 'computer' | 'online') => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
