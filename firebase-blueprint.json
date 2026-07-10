@@ -8,6 +8,7 @@
         "uid": { "type": "string", "maxLength": 128 },
         "displayName": { "type": "string", "maxLength": 100 },
         "elo": { "type": "number" },
+        "maxBotUnlocked": { "type": "number" },
         "createdAt": { "type": "string" }
       },
       "required": ["uid", "elo"]

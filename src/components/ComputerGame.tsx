@@ -8,7 +8,9 @@ import { DrawShape } from 'chessground/draw';
 import { bots, Bot } from '../data/bots';
 import { playMoveSound, playCaptureSound } from '../lib/sounds';
 import { getMaterialDifference } from '../lib/chess-utils';
-import { Lightbulb } from 'lucide-react';
+import { Lightbulb, Lock } from 'lucide-react';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export default function ComputerGame() {
   const setGameMode = useAppStore((state) => state.setGameMode);
@@ -19,6 +21,21 @@ export default function ComputerGame() {
   const [showTips, setShowTips] = useState(false);
   const [tipsShapes, setTipsShapes] = useState<DrawShape[]>([]);
   const [gameOverStats, setGameOverStats] = useState<{ winner: string | null, type: string } | null>(null);
+  
+  const [maxBotUnlocked, setMaxBotUnlocked] = useState<number>(0);
+
+  const user = auth.currentUser;
+
+  useEffect(() => {
+    if (user) {
+      const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+        if (snap.exists()) {
+          setMaxBotUnlocked(snap.data().maxBotUnlocked || 0);
+        }
+      });
+      return () => unsub();
+    }
+  }, [user]);
 
   const engine = useMemo(() => new Engine(), []);
   const tipsEngine = useMemo(() => new Engine(), []);
@@ -61,19 +78,31 @@ export default function ComputerGame() {
     }
   }, [showTips, fen, chess, updateTips]);
 
+  const handleGameOver = useCallback(async (winner: string | null, type: string) => {
+    setGameOverStats({ winner, type });
+    if (winner === 'white' && selectedBot && user) {
+      const botIndex = bots.findIndex(b => b.id === selectedBot.id);
+      if (botIndex >= maxBotUnlocked && botIndex + 1 < bots.length) {
+        // Unlock next bot
+        const newMax = botIndex + 1;
+        await setDoc(doc(db, 'users', user.uid), { maxBotUnlocked: newMax }, { merge: true });
+      }
+    }
+  }, [selectedBot, user, maxBotUnlocked]);
+
   const checkGameOver = useCallback(() => {
     if (chess.isGameOver()) {
       if (chess.isCheckmate()) {
-        setGameOverStats({ winner: chess.turn() === 'w' ? 'black' : 'white', type: 'checkmate' });
+        handleGameOver(chess.turn() === 'w' ? 'black' : 'white', 'checkmate');
       } else if (chess.isStalemate()) {
-        setGameOverStats({ winner: null, type: 'stalemate' });
+        handleGameOver(null, 'stalemate');
       } else {
-        setGameOverStats({ winner: null, type: 'draw' });
+        handleGameOver(null, 'draw');
       }
       return true;
     }
     return false;
-  }, [chess]);
+  }, [chess, handleGameOver]);
 
   const onMove = useCallback(async (orig: string, dest: string) => {
     try {
@@ -128,7 +157,6 @@ export default function ComputerGame() {
     });
   }
 
-
   const config: Config = {
     fen,
     turnColor,
@@ -174,17 +202,38 @@ export default function ComputerGame() {
         </div>
         
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {bots.map((bot) => (
-            <div 
-              key={bot.id} 
-              onClick={() => setSelectedBot(bot)}
-              className="bg-[#262421] p-4 rounded-xl cursor-pointer hover:bg-[#322e2b] transition-colors flex flex-col items-center border border-transparent hover:border-[#779556]"
-            >
-              <img src={bot.avatar} alt={bot.name} referrerPolicy="no-referrer" className="w-24 h-24 rounded-full mb-3 object-cover bg-[#403d39]" />
-              <h3 className="font-bold text-lg">{bot.name}</h3>
-              <p className="text-sm text-gray-400">Rating: {bot.rating}</p>
-            </div>
-          ))}
+          {bots.map((bot, index) => {
+            const isLocked = index > maxBotUnlocked;
+            return (
+              <div 
+                key={bot.id} 
+                onClick={() => {
+                  if (!isLocked) setSelectedBot(bot);
+                }}
+                className={`p-4 rounded-xl flex flex-col items-center border transition-colors relative
+                  ${isLocked 
+                    ? 'bg-[#1b1a17] border-transparent opacity-60 cursor-not-allowed' 
+                    : 'bg-[#262421] cursor-pointer hover:bg-[#322e2b] border-transparent hover:border-[#779556]'
+                  }`}
+              >
+                <div className="relative mb-3">
+                  <img 
+                    src={bot.avatar} 
+                    alt={bot.name} 
+                    referrerPolicy="no-referrer" 
+                    className={`w-24 h-24 rounded-full object-cover bg-[#403d39] ${isLocked ? 'grayscale' : ''}`} 
+                  />
+                  {isLocked && (
+                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center">
+                      <Lock className="text-white drop-shadow-md" size={32} />
+                    </div>
+                  )}
+                </div>
+                <h3 className="font-bold text-lg">{bot.name}</h3>
+                <p className="text-sm text-gray-400">Rating: {bot.rating}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
     );

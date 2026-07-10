@@ -10,7 +10,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       function isValidUser(data) {
-        return data.keys().hasAll(['uid', 'elo', 'displayName']) &&
+        return data.keys().hasAll(['uid', 'elo', 'displayName']) && (!('maxBotUnlocked' in data) || data.maxBotUnlocked is number) &&
                data.uid == userId &&
                data.uid == request.auth.uid &&
                data.elo is number &&
@@ -20,7 +20,7 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && isValidUser(incoming());
       allow update: if isSignedIn() && userId == request.auth.uid && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['elo']) && incoming().elo is number
+        incoming().diff(existing()).affectedKeys().hasOnly(['elo', 'maxBotUnlocked']) && incoming().elo is number && (!('maxBotUnlocked' in incoming()) || incoming().maxBotUnlocked is number)
       );
     }
 

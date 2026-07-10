@@ -25,6 +25,7 @@ export default function App() {
               uid: currentUser.uid,
               displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Anonymous',
               elo: 500,
+              maxBotUnlocked: 0,
               createdAt: serverTimestamp()
             });
           }
